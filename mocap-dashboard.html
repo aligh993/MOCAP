@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOCAP // Whole-Body Motion Capture Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D12;
+    --bg-2:#0D1117;
+    --panel:#10141B;
+    --panel-2:#0C0F15;
+    --border:#1E2530;
+    --border-soft:#161B24;
+    --text:#E7ECF3;
+    --text-dim:#7A8494;
+    --text-dimmer:#4B5563;
+    --accent:#4FE3C1;
+    --accent-dim:#2C7A6C;
+    --accent-soft:rgba(79,227,193,.12);
+    --warn:#FF6B4A;
+    --amber:#FFB454;
+    --red:#FF5470;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Space Grotesk', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(ellipse 1200px 600px at 50% -10%, rgba(79,227,193,.06), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); color:var(--accent); }
+
+  /* ---------- layout ---------- */
+  #app{
+    display:grid;
+    grid-template-rows:56px 1fr;
+    height:100vh;
+    width:100vw;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    border-bottom:1px solid var(--border-soft);
+    background:linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+    z-index:20;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .mark{
+    width:26px; height:26px; border-radius:6px;
+    background:conic-gradient(from 220deg, var(--accent), var(--accent-dim), var(--accent));
+    box-shadow:0 0 16px rgba(79,227,193,.35);
+    position:relative;
+  }
+  .brand .mark::after{
+    content:""; position:absolute; inset:6px;
+    background:var(--bg); border-radius:3px;
+  }
+  .brand-text{ display:flex; flex-direction:column; line-height:1.05; }
+  .brand-text b{ font-size:14.5px; letter-spacing:.04em; font-weight:700; }
+  .brand-text span{ font-size:10.5px; color:var(--text-dim); font-family:var(--mono); letter-spacing:.03em; }
+
+  .hdr-right{ display:flex; align-items:center; gap:18px; }
+  .status-pill{
+    display:flex; align-items:center; gap:7px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.05em;
+    padding:6px 12px; border-radius:20px;
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    transition:all .25s ease;
+  }
+  .status-pill .dot{ width:7px; height:7px; border-radius:50%; background:var(--text-dimmer); transition:all .25s ease;}
+  .status-pill.idle .dot{ background:var(--text-dimmer); }
+  .status-pill.loading .dot{ background:var(--amber); box-shadow:0 0 8px var(--amber); animation:pulse 1s infinite; }
+  .status-pill.loading{ color:var(--amber); border-color:rgba(255,180,84,.3); }
+  .status-pill.tracking .dot{ background:var(--accent); box-shadow:0 0 8px var(--accent); animation:pulse 1.4s infinite; }
+  .status-pill.tracking{ color:var(--accent); border-color:rgba(79,227,193,.3); }
+  .status-pill.error .dot{ background:var(--red); box-shadow:0 0 8px var(--red); }
+  .status-pill.error{ color:var(--red); border-color:rgba(255,84,112,.3); }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
+  .fps-readout{ font-family:var(--mono); font-size:11px; color:var(--text-dim); display:flex; gap:14px; }
+  .fps-readout b{ color:var(--text); font-weight:600; }
+
+  /* ---------- main grid ---------- */
+  main{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    min-height:0;
+  }
+  #viewport-wrap{
+    position:relative;
+    min-height:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% 30%, rgba(79,227,193,.05), transparent 65%),
+      var(--bg-2);
+    border-right:1px solid var(--border-soft);
+  }
+  #canvas3d{ position:absolute; inset:0; display:block; width:100%; height:100%; }
+
+  /* pip webcam */
+  #pip{
+    position:absolute; left:16px; bottom:16px;
+    width:220px; aspect-ratio:4/3;
+    border-radius:10px; overflow:hidden;
+    border:1px solid var(--border);
+    background:#000;
+    box-shadow:0 8px 28px rgba(0,0,0,.5);
+    z-index:10;
+    transition:opacity .2s ease;
+  }
+  #pip video, #pip canvas{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover;
+  }
+  #pip .pip-label{
+    position:absolute; top:6px; left:8px;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.08em;
+    color:rgba(255,255,255,.75); text-transform:uppercase;
+    display:flex; align-items:center; gap:5px;
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+  }
+  #pip .rec-dot{ width:6px; height:6px; border-radius:50%; background:var(--red); box-shadow:0 0 6px var(--red); animation:pulse 1.2s infinite; }
+  #pip.hidden{ display:none; }
+
+  /* viewport hint / empty state */
+  #viewport-hint{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; text-align:center; padding:20px;
+    pointer-events:none;
+  }
+  #viewport-hint .ring{
+    width:64px; height:64px; border-radius:50%;
+    border:1.5px dashed var(--border);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-dimmer);
+    animation:spin 12s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  #viewport-hint h2{ font-size:15px; font-weight:600; color:var(--text-dim); letter-spacing:.01em; }
+  #viewport-hint p{ font-size:12px; color:var(--text-dimmer); max-width:320px; line-height:1.5; font-family:var(--mono); }
+  #viewport-hint.hidden{ display:none; }
+
+  .axis-tag{
+    position:absolute; top:16px; left:18px;
+    font-family:var(--mono); font-size:10.5px; color:var(--text-dimmer);
+    letter-spacing:.08em; line-height:1.6;
+  }
+  .axis-tag b{ color:var(--text-dim); }
+
+  #err-banner{
+    position:absolute; top:16px; left:50%; transform:translateX(-50%);
+    background:rgba(255,84,112,.1); border:1px solid rgba(255,84,112,.35);
+    color:#FFB3C0; font-family:var(--mono); font-size:11.5px;
+    padding:9px 16px; border-radius:8px; max-width:560px; text-align:center;
+    display:none; z-index:30;
+  }
+  #err-banner.show{ display:block; }
+
+  /* ---------- sidebar ---------- */
+  #sidebar{
+    background:var(--panel);
+    overflow-y:auto;
+    display:flex; flex-direction:column;
+    min-height:0;
+  }
+  #sidebar::-webkit-scrollbar{ width:8px; }
+  #sidebar::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+
+  .panel-section{
+    padding:16px 18px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .panel-section h3{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.12em;
+    color:var(--text-dimmer); font-weight:600; margin-bottom:12px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+
+  /* start/stop button */
+  .btn{
+    width:100%; padding:11px 14px; border-radius:8px;
+    border:1px solid var(--border); background:var(--panel-2);
+    color:var(--text); font-family:var(--sans); font-weight:600; font-size:13px;
+    cursor:pointer; transition:all .15s ease;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    letter-spacing:.01em;
+  }
+  .btn:hover{ border-color:var(--text-dim); }
+  .btn:active{ transform:scale(.98); }
+  .btn.primary{
+    background:linear-gradient(180deg, rgba(79,227,193,.16), rgba(79,227,193,.08));
+    border-color:rgba(79,227,193,.4); color:var(--accent);
+  }
+  .btn.primary:hover{ border-color:var(--accent); box-shadow:0 0 0 1px rgba(79,227,193,.15) inset; }
+  .btn.danger{
+    background:linear-gradient(180deg, rgba(255,84,112,.14), rgba(255,84,112,.06));
+    border-color:rgba(255,84,112,.35); color:#FF8FA3;
+  }
+  .btn.ghost{ background:transparent; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn svg{ width:14px; height:14px; }
+
+  .btn-row{ display:flex; gap:8px; margin-top:8px; }
+  .btn-row .btn{ flex:1; }
+
+  /* toggles */
+  .toggle-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:7px 0; font-size:12.5px; color:var(--text-dim);
+  }
+  .toggle-row span{ display:flex; align-items:center; gap:8px; }
+  .switch{
+    position:relative; width:34px; height:19px; border-radius:20px;
+    background:var(--border); cursor:pointer; flex-shrink:0;
+    transition:background .2s ease; border:1px solid var(--border);
+  }
+  .switch::after{
+    content:""; position:absolute; top:1.5px; left:1.5px;
+    width:14px; height:14px; border-radius:50%;
+    background:var(--text-dim);
+    transition:all .2s cubic-bezier(.4,0,.2,1);
+  }
+  .switch.on{ background:rgba(79,227,193,.18); border-color:rgba(79,227,193,.5); }
+  .switch.on::after{ left:16.5px; background:var(--accent); box-shadow:0 0 6px var(--accent); }
+
+  /* sliders */
+  .slider-row{ margin:10px 0 4px; }
+  .slider-label{
+    display:flex; justify-content:space-between; font-size:11.5px;
+    color:var(--text-dim); margin-bottom:6px; font-family:var(--mono);
+  }
+  .slider-label b{ color:var(--accent); font-weight:600; }
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:3px; border-radius:3px;
+    background:var(--border); outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 8px rgba(79,227,193,.5);
+    border:2px solid #0A0D12;
+  }
+
+  /* stats grid */
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat-box{
+    background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:8px; padding:9px 10px;
+  }
+  .stat-box .label{ font-size:9.5px; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.08em; }
+  .stat-box .value{ font-family:var(--mono); font-size:16px; font-weight:600; color:var(--text); margin-top:3px; }
+  .stat-box .value span{ font-size:11px; color:var(--text-dim); font-weight:400; }
+
+  /* signal bars - signature element */
+  .signal-list{ display:flex; flex-direction:column; gap:9px; }
+  .signal-item{ display:flex; align-items:center; gap:9px; }
+  .signal-item .name{
+    width:64px; flex-shrink:0; font-size:10.5px; color:var(--text-dim);
+    font-family:var(--mono); text-transform:uppercase; letter-spacing:.02em;
+  }
+  .signal-track{
+    flex:1; height:14px; background:var(--panel-2); border-radius:3px;
+    display:flex; align-items:center; gap:2px; padding:0 3px;
+    border:1px solid var(--border-soft);
+    overflow:hidden;
+  }
+  .signal-bar{
+    flex:1; height:70%; border-radius:1px; background:var(--border);
+    transition:height .12s ease, background .12s ease;
+  }
+  .signal-pct{
+    width:32px; text-align:right; font-family:var(--mono); font-size:10px; color:var(--text-dimmer);
+    flex-shrink:0;
+  }
+
+  footer.note{
+    padding:14px 18px; font-size:10.5px; line-height:1.6; color:var(--text-dimmer);
+    font-family:var(--mono); margin-top:auto;
+  }
+  footer.note b{ color:var(--text-dim); }
+
+  /* loading overlay */
+  #loading-overlay{
+    position:fixed; inset:0; background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:100; gap:16px;
+    transition:opacity .4s ease;
+  }
+  #loading-overlay.hidden{ opacity:0; pointer-events:none; }
+  .loader-ring{
+    width:44px; height:44px; border-radius:50%;
+    border:2px solid var(--border-soft); border-top-color:var(--accent);
+    animation:spin 0.9s linear infinite;
+  }
+  #loading-overlay p{ font-family:var(--mono); font-size:11.5px; color:var(--text-dim); letter-spacing:.05em; }
+
+  @media (max-width: 880px){
+    main{ grid-template-columns:1fr; grid-template-rows:55vh 1fr; }
+    #viewport-wrap{ border-right:none; border-bottom:1px solid var(--border-soft); }
+    #pip{ width:150px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="loader-ring"></div>
+  <p>LOADING TRACKING MODELS&hellip;</p>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="mark"></div>
+      <div class="brand-text">
+        <b>MOCAP</b>
+        <span>WHOLE-BODY WEBCAM MOTION CAPTURE</span>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="fps-readout">
+        <span>FPS <b id="fps-val">&mdash;</b></span>
+        <span>LANDMARKS <b id="lm-val">0</b>/33</span>
+      </div>
+      <div class="status-pill idle" id="status-pill">
+        <div class="dot"></div>
+        <span id="status-text">IDLE</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="viewport-wrap">
+      <canvas id="canvas3d"></canvas>
+
+      <div class="axis-tag">RIG &mdash; <b>SKELETON + SOLID MODEL</b><br>SPACE &mdash; NORMALIZED, HIP-CENTERED<br>DRAG TO ORBIT &middot; SCROLL TO ZOOM</div>
+
+      <div id="viewport-hint">
+        <div class="ring">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>
+        </div>
+        <h2>No signal</h2>
+        <p>Start the camera to begin whole-body tracking. A wireframe skeleton and a solid humanoid model stand side by side, both mirroring your pose, arms, legs and hands in real time &mdash; all processed locally in your browser.</p>
+      </div>
+
+      <div id="err-banner"></div>
+
+      <div id="pip" class="hidden">
+        <video id="input-video" autoplay playsinline muted></video>
+        <canvas id="pip-overlay"></canvas>
+        <div class="pip-label"><div class="rec-dot"></div>SOURCE FEED</div>
+      </div>
+    </div>
+
+    <aside id="sidebar">
+      <div class="panel-section">
+        <h3>Capture</h3>
+        <button class="btn primary" id="btn-toggle-cam">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          <span id="btn-toggle-label">Start camera</span>
+        </button>
+        <div class="btn-row">
+          <button class="btn ghost" id="btn-export">Export pose JSON</button>
+          <button class="btn ghost" id="btn-reset-view">Reset view</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>3D model</h3>
+        <div class="slider-row" style="margin-top:0;">
+          <div class="slider-label" style="margin-bottom:6px;"><span>Active model</span></div>
+          <select id="model-source-select" style="width:100%; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:var(--sans); font-size:12.5px;">
+            <option value="procedural">Procedural (default)</option>
+            <option value="xbot" id="opt-xbot" disabled>Realistic — Xbot</option>
+            <option value="custom" id="opt-custom" disabled>Your uploaded model</option>
+          </select>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn ghost" id="btn-upload-model">Upload your 3D model</button>
+        </div>
+        <input type="file" id="model-upload-input" accept=".glb,.vrm,.gltf" style="display:none;">
+        <div id="model-upload-status" style="font-size:11px; line-height:1.5; color:var(--text-dimmer); font-family:var(--mono); margin-top:9px;">
+          Supports rigged (skeleton) .glb or .vrm humanoid models. Static/non-rigged models can't be motion-captured.
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Display</h3>
+        <div class="toggle-row"><span>Skeleton rig</span><div class="switch on" data-toggle="showSkeleton"></div></div>
+        <div class="toggle-row"><span>Solid model</span><div class="switch on" data-toggle="showSolid"></div></div>
+        <div class="toggle-row"><span>Mirror view</span><div class="switch on" data-toggle="mirror"></div></div>
+        <div class="toggle-row"><span>Source feed (PIP)</span><div class="switch on" data-toggle="pip"></div></div>
+        <div class="toggle-row"><span>2D landmark overlay</span><div class="switch on" data-toggle="overlay2d"></div></div>
+        <div class="toggle-row"><span>Track hands</span><div class="switch on" data-toggle="hands"></div></div>
+        <div class="toggle-row"><span>Floor grid</span><div class="switch on" data-toggle="grid"></div></div>
+        <div class="toggle-row"><span>Auto-rotate rig</span><div class="switch" data-toggle="autorotate"></div></div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Detection thresholds</h3>
+        <div class="slider-row">
+          <div class="slider-label"><span>Min detection confidence</span><b id="dc-val">0.50</b></div>
+          <input type="range" id="dc-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><span>Min tracking confidence</span><b id="tc-val">0.50</b></div>
+          <input type="range" id="tc-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label"><span>Smoothing</span><b id="sm-val">0.55</b></div>
+          <input type="range" id="sm-slider" min="0" max="0.9" step="0.05" value="0.55">
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Session stats</h3>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="label">Resolution</div><div class="value" id="stat-res">&mdash;</div></div>
+          <div class="stat-box"><div class="label">Avg confidence</div><div class="value" id="stat-conf">0<span>%</span></div></div>
+          <div class="stat-box"><div class="label">Frame time</div><div class="value" id="stat-frametime">0<span>ms</span></div></div>
+          <div class="stat-box"><div class="label">Uptime</div><div class="value" id="stat-uptime">0<span>s</span></div></div>
+          <div class="stat-box" style="grid-column:1/-1;"><div class="label">Solid model</div><div class="value" id="stat-model" style="font-size:12.5px;">Loading&hellip;</div></div>
+        </div>
+      </div>
+
+      <div class="panel-section" style="border-bottom:none;">
+        <h3>Tracking signal</h3>
+        <div class="signal-list" id="signal-list"><!-- populated by JS --></div>
+      </div>
+
+      <footer class="note">
+        <b>Privacy:</b> all pose estimation runs on-device via MediaPipe + WebGL. No video or landmark data leaves your browser.
+      </footer>
+    </aside>
+  </main>
+</div>
+
+<!-- MediaPipe Holistic (whole body: pose + hands + face) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+
+<!-- Three.js (ES modules — modern three.js no longer ships the old UMD examples/js build) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+
+(function(){
+  "use strict";
+
+  /* =========================================================
+     0. SKELETON TOPOLOGY (BlazePose-33)
+  ========================================================= */
+  var POSE_BONES = [
+    [11,12], // shoulders
+    [11,13],[13,15], // left arm
+    [12,14],[14,16], // right arm
+    [15,17],[15,19],[15,21],[17,19], // left hand (simple)
+    [16,18],[16,20],[16,22],[18,20], // right hand (simple)
+    [11,23],[12,24],[23,24], // torso
+    [23,25],[25,27], // left leg
+    [24,26],[26,28], // right leg
+    [27,29],[27,31],[29,31], // left foot
+    [28,30],[28,32],[30,32], // right foot
+    [7,0],[0,8] // ears to nose (simple head line)
+  ];
+  var MAJOR_JOINTS = [11,12,13,14,15,16,23,24,25,26,27,28]; // shoulders/elbows/wrists/hips/knees/ankles
+  var SIGNAL_LABELS = {11:'L.SHLD',12:'R.SHLD',13:'L.ELBW',14:'R.ELBW',15:'L.WRST',16:'R.WRST',
+                        23:'L.HIP',24:'R.HIP',25:'L.KNEE',26:'R.KNEE',27:'L.ANKL',28:'R.ANKL'};
+  var HAND_BONES = [
+    [0,1],[1,2],[2,3],[3,4],          // thumb
+    [0,5],[5,6],[6,7],[7,8],          // index
+    [0,9],[9,10],[10,11],[11,12],     // middle
+    [0,13],[13,14],[14,15],[15,16],   // ring
+    [0,17],[17,18],[18,19],[19,20],   // pinky
+    [5,9],[9,13],[13,17]              // palm
+  ];
+
+  // ---- solid humanoid body (side-by-side companion to the wireframe rig) ----
+  // segment endpoints: a landmark index (number) OR a synthetic key ('shoulderMid'/'hipMid')
+  var SOLID_LIMBS = [
+    ['hipMid','shoulderMid', 0.150, 'shirt'], // torso
+    [23,24, 0.100, 'pants'],                  // pelvis bar
+    [11,12, 0.075, 'shirt'],                  // shoulder bar
+    ['shoulderMid',0, 0.055, 'skin'],         // neck
+    [11,13, 0.055, 'skin'],[13,15, 0.045, 'skin'],  // left arm
+    [12,14, 0.055, 'skin'],[14,16, 0.045, 'skin'],  // right arm
+    [23,25, 0.075, 'pants'],[25,27, 0.060, 'pants'], // left leg
+    [24,26, 0.075, 'pants'],[26,28, 0.060, 'pants']  // right leg
+  ];
+  var SOLID_JOINTS = [
+    {idx:11, r:0.060, mat:'skin'}, {idx:12, r:0.060, mat:'skin'},
+    {idx:13, r:0.050, mat:'skin'}, {idx:14, r:0.050, mat:'skin'},
+    {idx:23, r:0.090, mat:'pants'},{idx:24, r:0.090, mat:'pants'},
+    {idx:25, r:0.065, mat:'pants'},{idx:26, r:0.065, mat:'pants'}
+  ];
+
+  // ---- rig-agnostic humanoid retargeting ----
+  // ROLE_TARGETS uses canonical (VRM-spec-style) role names rather than any one
+  // rig's literal bone names, so the same retargeting math works for the
+  // built-in Xbot model AND for arbitrary user-uploaded rigged models.
+  // Each entry: this role's bone, a reference bone used to establish a
+  // bind-pose direction, and the tracked landmark pair that direction should
+  // track live. Order matters — parents must precede their children.
+  var GLTF_MODEL_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Xbot.glb';
+  var ROLE_TARGETS = [
+    {role:'hips',          ref:'spine',               lmA:'hipMid', lmB:'shoulderMid'},
+    {role:'leftUpperLeg',  ref:'leftLowerLeg',         lmA:23, lmB:25},
+    {role:'leftLowerLeg',  ref:'leftFoot',             lmA:25, lmB:27},
+    {role:'leftFoot',      ref:'leftToes',             lmA:27, lmB:31},
+    {role:'rightUpperLeg', ref:'rightLowerLeg',        lmA:24, lmB:26},
+    {role:'rightLowerLeg', ref:'rightFoot',            lmA:26, lmB:28},
+    {role:'rightFoot',     ref:'rightToes',            lmA:28, lmB:32},
+    {role:'leftUpperArm',  ref:'leftLowerArm',         lmA:11, lmB:13},
+    {role:'leftLowerArm',  ref:'leftHand',             lmA:13, lmB:15},
+    {role:'leftHand',      ref:'leftMiddleProximal',   lmA:15, lmB:19},
+    {role:'rightUpperArm', ref:'rightLowerArm',        lmA:12, lmB:14},
+    {role:'rightLowerArm', ref:'rightHand',            lmA:14, lmB:16},
+    {role:'rightHand',     ref:'rightMiddleProximal',  lmA:16, lmB:20}
+  ];
+  // exact names for the bundled Xbot model (Mixamo rig) — deterministic, no guessing needed
+  var MIXAMO_NAME_BY_ROLE = {
+    hips:'mixamorig:Hips', spine:'mixamorig:Spine',
+    leftUpperLeg:'mixamorig:LeftUpLeg', leftLowerLeg:'mixamorig:LeftLeg', leftFoot:'mixamorig:LeftFoot', leftToes:'mixamorig:LeftToeBase',
+    rightUpperLeg:'mixamorig:RightUpLeg', rightLowerLeg:'mixamorig:RightLeg', rightFoot:'mixamorig:RightFoot', rightToes:'mixamorig:RightToeBase',
+    leftUpperArm:'mixamorig:LeftArm', leftLowerArm:'mixamorig:LeftForeArm', leftHand:'mixamorig:LeftHand', leftMiddleProximal:'mixamorig:LeftHandMiddle1',
+    rightUpperArm:'mixamorig:RightArm', rightLowerArm:'mixamorig:RightForeArm', rightHand:'mixamorig:RightHand', rightMiddleProximal:'mixamorig:RightHandMiddle1'
+  };
+  // fuzzy name matching for arbitrary uploaded rigs — validated against Mixamo,
+  // Unity Humanoid, Ready Player Me, Blender .L/.R, and raw VRM (J_Bip_) naming,
+  // with a two-tier exact/substring match to avoid false positives on unrelated nodes.
+  var ROLE_CANDIDATES = {
+    hips:            { exact:['hips','hip','pelvis'], loose:['hips','pelvis'] },
+    spine:           { exact:['spine','spine1','chest','torso','abdomen','upperbody'], loose:['spine'] },
+    leftUpperLeg:    { exact:['leftupperleg','leftupleg','leftthigh','jbiplupperleg','thighl','upperlegl'], loose:['leftupperleg','leftupleg','leftthigh','upperleg'] },
+    leftLowerLeg:    { exact:['leftlowerleg','leftleg','leftshin','leftcalf','jbipllowerleg','shinl','calfl','lowerlegl'], loose:['leftlowerleg','leftshin','leftcalf'] },
+    leftFoot:        { exact:['leftfoot','jbiplfoot','footl'], loose:['leftfoot'] },
+    leftToes:        { exact:['lefttoes','lefttoebase','jbipltoebase','toel','toesl'], loose:['lefttoe'] },
+    rightUpperLeg:   { exact:['rightupperleg','rightupleg','rightthigh','jbiprupperleg','thighr','upperlegr'], loose:['rightupperleg','rightupleg','rightthigh','upperleg'] },
+    rightLowerLeg:   { exact:['rightlowerleg','rightleg','rightshin','rightcalf','jbiprlowerleg','shinr','calfr','lowerlegr'], loose:['rightlowerleg','rightshin','rightcalf'] },
+    rightFoot:       { exact:['rightfoot','jbiprfoot','footr'], loose:['rightfoot'] },
+    rightToes:       { exact:['righttoes','righttoebase','jbiprtoebase','toer','toesr'], loose:['righttoe'] },
+    leftUpperArm:    { exact:['leftupperarm','leftarm','jbiplupperarm','upperarml','arml'], loose:['leftupperarm','leftarm'] },
+    leftLowerArm:    { exact:['leftlowerarm','leftforearm','jbipllowerarm','forearml','lowerarml'], loose:['leftlowerarm','leftforearm'] },
+    leftHand:        { exact:['lefthand','jbiplhand','handl'], loose:['lefthand'] },
+    leftMiddleProximal:{ exact:['leftmiddleproximal','leftmiddle1','jbiplmiddle1','middle1l'], loose:['leftmiddle'] },
+    rightUpperArm:   { exact:['rightupperarm','rightarm','jbiprupperarm','upperarmr','armr'], loose:['rightupperarm','rightarm'] },
+    rightLowerArm:   { exact:['rightlowerarm','rightforearm','jbiprlowerarm','forearmr','lowerarmr'], loose:['rightlowerarm','rightforearm'] },
+    rightHand:       { exact:['righthand','jbiprhand','handr'], loose:['righthand'] },
+    rightMiddleProximal:{ exact:['rightmiddleproximal','rightmiddle1','jbiprmiddle1','middle1r'], loose:['rightmiddle'] }
+  };
+  function normalizeBoneName(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+
+  /* =========================================================
+     1. STATE
+  ========================================================= */
+  var state = {
+    running:false,
+    mirror:true,
+    showPip:true,
+    overlay2d:true,
+    trackHands:true,
+    showGrid:true,
+    showSkeleton:true,
+    showSolid:true,
+    modelSource:'procedural', // 'procedural' | 'xbot' | 'custom'
+    autorotate:false,
+    smoothing:0.55,
+    minDetConf:0.5,
+    minTrackConf:0.5,
+    startTime:null,
+    lastFrameTime:performance.now(),
+    fpsHistory:[],
+    latestResults:null,
+    smoothedJoints:{}, // idx -> THREE.Vector3
+    smoothedHands:{L:null,R:null}
+  };
+
+  /* =========================================================
+     2. DOM refs
+  ========================================================= */
+  var $ = function(id){ return document.getElementById(id); };
+  var videoEl = $('input-video');
+  var pipOverlay = $('pip-overlay');
+  var pipCtx = pipOverlay.getContext('2d');
+  var pipEl = $('pip');
+  var viewportHint = $('viewport-hint');
+  var errBanner = $('err-banner');
+  var statusPill = $('status-pill');
+  var statusText = $('status-text');
+  var fpsVal = $('fps-val');
+  var lmVal = $('lm-val');
+  var btnToggleCam = $('btn-toggle-cam');
+  var btnToggleLabel = $('btn-toggle-label');
+
+  function showError(msg){
+    errBanner.textContent = msg;
+    errBanner.classList.add('show');
+    setTimeout(function(){ errBanner.classList.remove('show'); }, 6000);
+  }
+
+  function setStatus(mode, text){
+    statusPill.className = 'status-pill ' + mode;
+    statusText.textContent = text;
+  }
+
+  /* =========================================================
+     3. SIGNAL BARS UI (signature element)
+  ========================================================= */
+  var signalList = $('signal-list');
+  var signalBars = {}; // idx -> {track, pct}
+  MAJOR_JOINTS.forEach(function(idx){
+    var row = document.createElement('div');
+    row.className = 'signal-item';
+    var name = document.createElement('div');
+    name.className = 'name'; name.textContent = SIGNAL_LABELS[idx];
+    var track = document.createElement('div');
+    track.className = 'signal-track';
+    var bars = [];
+    for(var i=0;i<10;i++){
+      var b = document.createElement('div');
+      b.className = 'signal-bar';
+      track.appendChild(b);
+      bars.push(b);
+    }
+    var pct = document.createElement('div');
+    pct.className = 'signal-pct'; pct.textContent = '0%';
+    row.appendChild(name); row.appendChild(track); row.appendChild(pct);
+    signalList.appendChild(row);
+    signalBars[idx] = {bars:bars, pct:pct};
+  });
+
+  function updateSignalBars(landmarks){
+    MAJOR_JOINTS.forEach(function(idx){
+      var vis = (landmarks && landmarks[idx] && typeof landmarks[idx].visibility === 'number') ? landmarks[idx].visibility : 0;
+      var ui = signalBars[idx];
+      var litCount = Math.round(vis * 10);
+      var color = vis > 0.7 ? 'var(--accent)' : (vis > 0.4 ? 'var(--amber)' : 'var(--red)');
+      ui.bars.forEach(function(bar, i){
+        if(i < litCount){
+          bar.style.background = color;
+          bar.style.height = (40 + (i/10)*60) + '%';
+        } else {
+          bar.style.background = 'var(--border)';
+          bar.style.height = '30%';
+        }
+      });
+      ui.pct.textContent = Math.round(vis*100) + '%';
+    });
+  }
+
+  /* =========================================================
+     4. TOGGLES & SLIDERS
+  ========================================================= */
+  document.querySelectorAll('.switch').forEach(function(sw){
+    var key = sw.getAttribute('data-toggle');
+    sw.addEventListener('click', function(){
+      state[key] = !state[key];
+      sw.classList.toggle('on', state[key]);
+      onToggleChange(key);
+    });
+  });
+
+  function onToggleChange(key){
+    if(key === 'pip'){ pipEl.classList.toggle('hidden', !state.showPip || !state.running); }
+    if(key === 'grid' && floorGrid){ floorGrid.visible = state.showGrid; }
+    if(key === 'autorotate' && controls){ controls.autoRotate = state.autorotate; }
+    if(key === 'showSkeleton' && skeletonGroup){ skeletonGroup.visible = state.showSkeleton; }
+    if(key === 'showSolid' && humanGroup){ humanGroup.visible = state.showSolid; }
+  }
+
+  // Switches which solid-model representation is active: 'procedural' (default,
+  // self-contained, always available), 'xbot' (the bundled rigged model, once
+  // it finishes loading), or 'custom' (a user-uploaded model, once loaded).
+  // Falls back to procedural if the requested source isn't ready yet, so the
+  // user is never left with nothing visible.
+  function setSolidModelMode(source){
+    var showXbot = source === 'xbot' && !!xbotHumanoid;
+    var showCustom = source === 'custom' && !!customHumanoid;
+    var showProcedural = !showXbot && !showCustom;
+    state.modelSource = showXbot ? 'xbot' : (showCustom ? 'custom' : 'procedural');
+
+    if(!showProcedural){
+      solidLimbMeshes.forEach(function(item){ item.mesh.visible = false; });
+      solidJointMeshes.forEach(function(item){ item.mesh.visible = false; });
+      solidHead.visible = false; solidEyeL.visible = false; solidEyeR.visible = false;
+      ['L','R'].forEach(function(s){ solidHandMeshes[s].visible = false; solidFootMeshes[s].visible = false; });
+    }
+    if(xbotHumanoid) xbotHumanoid.root.visible = showXbot;
+    if(customHumanoid) customHumanoid.root.visible = showCustom;
+
+    var select = document.getElementById('model-source-select');
+    if(select && select.value !== state.modelSource) select.value = state.modelSource;
+  }
+
+  var modelSourceSelect = $('model-source-select');
+  if(modelSourceSelect){
+    modelSourceSelect.addEventListener('change', function(e){ setSolidModelMode(e.target.value); });
+  }
+  var btnUploadModel = $('btn-upload-model');
+  var modelUploadInput = $('model-upload-input');
+  if(btnUploadModel && modelUploadInput){
+    btnUploadModel.addEventListener('click', function(){ modelUploadInput.click(); });
+    modelUploadInput.addEventListener('change', function(e){
+      var file = e.target.files && e.target.files[0];
+      if(file) loadCustomModel(file);
+      e.target.value = ''; // allow re-selecting the same filename later
+    });
+  }
+
+  $('dc-slider').addEventListener('input', function(e){
+    state.minDetConf = parseFloat(e.target.value);
+    $('dc-val').textContent = state.minDetConf.toFixed(2);
+    if(holistic) holistic.setOptions({minDetectionConfidence: state.minDetConf, minTrackingConfidence: state.minTrackConf});
+  });
+  $('tc-slider').addEventListener('input', function(e){
+    state.minTrackConf = parseFloat(e.target.value);
+    $('tc-val').textContent = state.minTrackConf.toFixed(2);
+    if(holistic) holistic.setOptions({minDetectionConfidence: state.minDetConf, minTrackingConfidence: state.minTrackConf});
+  });
+  $('sm-slider').addEventListener('input', function(e){
+    state.smoothing = parseFloat(e.target.value);
+    $('sm-val').textContent = state.smoothing.toFixed(2);
+  });
+
+  $('btn-export').addEventListener('click', function(){
+    if(!state.latestResults){ showError('No tracking data yet — start the camera first.'); return; }
+    var payload = {
+      timestamp:new Date().toISOString(),
+      poseLandmarks: state.latestResults.poseLandmarks || null,
+      leftHandLandmarks: state.latestResults.leftHandLandmarks || null,
+      rightHandLandmarks: state.latestResults.rightHandLandmarks || null
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'mocap-pose-' + Date.now() + '.json';
+    a.click();
+  });
+
+  $('btn-reset-view').addEventListener('click', function(){
+    if(!camera3d || !controls) return;
+    camera3d.position.set(0, 1.6, 4.8);
+    controls.target.set(0, 1.0, 0);
+    controls.update();
+  });
+
+  /* =========================================================
+     5. THREE.JS SCENE
+  ========================================================= */
+  var canvas3d = $('canvas3d');
+  var renderer, scene, camera3d, controls, floorGrid;
+  var skeletonGroup, humanGroup;
+  var jointMeshes = {};   // idx -> Mesh (sphere)
+  var boneMeshes = [];    // {mesh, a, b}
+  var boneMeshByPair = {}; // "a-b" -> mesh, for the solid model to copy exact transforms from
+  var handJointMeshes = {L:[], R:[]};
+  var handBoneLines = {L:null, R:null};
+  var headSphere;
+  var solidLimbMeshes = [];   // {mesh, a, b}
+  var solidJointMeshes = [];  // {mesh, idx}
+  var solidHead, solidEyeL, solidEyeR;
+  var solidHandMeshes = {L:null, R:null};
+  var solidFootMeshes = {L:null, R:null};
+  var xbotHumanoid = null;       // {root, retarget} once the bundled Xbot loads
+  var customHumanoid = null;     // {root, retarget, name} once a user uploads a model
+  var synthPointsGltf = {};
+
+  function initThree(){
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0d12, 0.045);
+
+    camera3d = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
+    camera3d.position.set(0, 1.6, 4.8);
+
+    renderer = new THREE.WebGLRenderer({canvas:canvas3d, antialias:true, alpha:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    controls = new OrbitControls(camera3d, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 1.0, 0);
+    controls.minDistance = 1.5;
+    controls.maxDistance = 12;
+    controls.maxPolarAngle = Math.PI * 0.92;
+
+    // lighting
+    scene.add(new THREE.AmbientLight(0x8fa2b0, 0.55));
+    var key = new THREE.DirectionalLight(0x9fe8d8, 1.1);
+    key.position.set(2, 4, 3);
+    scene.add(key);
+    var rim = new THREE.PointLight(0x4fe3c1, 1.4, 12);
+    rim.position.set(-2, 2, -2);
+    scene.add(rim);
+
+    // floor grid
+    floorGrid = new THREE.GridHelper(10, 24, 0x2c7a6c, 0x161b24);
+    floorGrid.material.transparent = true;
+    floorGrid.material.opacity = 0.35;
+    scene.add(floorGrid);
+
+    var circleGeo = new THREE.CircleGeometry(2.1, 56);
+    var circleMat = new THREE.MeshBasicMaterial({color:0x0d1720, transparent:true, opacity:0.5});
+    var circle = new THREE.Mesh(circleGeo, circleMat);
+    circle.rotation.x = -Math.PI/2;
+    circle.position.y = -0.001;
+    scene.add(circle);
+
+    // two side-by-side rigs, driven by identical local-space landmark data
+    skeletonGroup = new THREE.Group();
+    skeletonGroup.position.x = -1.0;
+    scene.add(skeletonGroup);
+    humanGroup = new THREE.Group();
+    humanGroup.position.x = 1.0;
+    scene.add(humanGroup);
+
+    function makeLabelSprite(text, color){
+      var cv = document.createElement('canvas');
+      cv.width = 320; cv.height = 72;
+      var ctx = cv.getContext('2d');
+      ctx.font = '600 32px "Space Grotesk", sans-serif';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 160, 36);
+      var tex = new THREE.CanvasTexture(cv);
+      var mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
+      var sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.0, 0.225, 1);
+      return sprite;
+    }
+    var skelLabel = makeLabelSprite('SKELETON', '#4FE3C1');
+    skelLabel.position.set(0, 2.2, 0);
+    skeletonGroup.add(skelLabel);
+    var solidLabel = makeLabelSprite('SOLID MODEL', '#E3B08C');
+    solidLabel.position.set(0, 2.2, 0);
+    humanGroup.add(solidLabel);
+
+    // body joints + bones
+    var jointGeo = new THREE.SphereGeometry(0.028, 14, 14);
+    var jointMat = function(){
+      return new THREE.MeshStandardMaterial({color:0x4fe3c1, emissive:0x1a6f60, emissiveIntensity:0.9, roughness:0.35, metalness:0.2});
+    };
+    for(var i=0;i<33;i++){
+      var m = new THREE.Mesh(jointGeo, jointMat());
+      m.visible = false;
+      skeletonGroup.add(m);
+      jointMeshes[i] = m;
+    }
+    headSphere = new THREE.Mesh(new THREE.SphereGeometry(0.11,20,20), new THREE.MeshStandardMaterial({color:0x162129, emissive:0x1a6f60, emissiveIntensity:0.25, roughness:0.5}));
+    headSphere.visible = false;
+    skeletonGroup.add(headSphere);
+
+    var boneMat = function(){
+      return new THREE.MeshStandardMaterial({color:0x2fbfa0, emissive:0x0e3a32, emissiveIntensity:0.7, roughness:0.4, metalness:0.15});
+    };
+    POSE_BONES.forEach(function(pair){
+      var geo = new THREE.CylinderGeometry(0.014, 0.014, 1, 8, 1);
+      var mesh = new THREE.Mesh(geo, boneMat());
+      mesh.visible = false;
+      skeletonGroup.add(mesh);
+      boneMeshes.push({mesh:mesh, a:pair[0], b:pair[1]});
+      boneMeshByPair[pair[0] + '-' + pair[1]] = mesh;
+    });
+
+    // hand joints (small) + line-based bones
+    ['L','R'].forEach(function(side){
+      var arr = [];
+      var hMat = new THREE.MeshStandardMaterial({color: side==='L' ? 0xffb454 : 0xff6b4a, emissive:0x331a0d, emissiveIntensity:0.6});
+      for(var i=0;i<21;i++){
+        var hm = new THREE.Mesh(new THREE.SphereGeometry(0.012,8,8), hMat);
+        hm.visible = false;
+        skeletonGroup.add(hm);
+        arr.push(hm);
+      }
+      handJointMeshes[side] = arr;
+
+      var lineGeo = new THREE.BufferGeometry();
+      var positions = new Float32Array(HAND_BONES.length * 2 * 3);
+      lineGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      var lineMat = new THREE.LineBasicMaterial({color: side==='L' ? 0xffb454 : 0xff6b4a, transparent:true, opacity:0.85});
+      var lines = new THREE.LineSegments(lineGeo, lineMat);
+      lines.visible = false;
+      skeletonGroup.add(lines);
+      handBoneLines[side] = lines;
+    });
+
+    // ================= SOLID HUMANOID MODEL =================
+    var solidMat = {
+      skin:  new THREE.MeshStandardMaterial({color:0xE3B08C, roughness:0.65, metalness:0.05}),
+      shirt: new THREE.MeshStandardMaterial({color:0x3A4A5C, roughness:0.6,  metalness:0.1}),
+      pants: new THREE.MeshStandardMaterial({color:0x232B36, roughness:0.6,  metalness:0.1}),
+      shoe:  new THREE.MeshStandardMaterial({color:0x14181D, roughness:0.5,  metalness:0.15}),
+      eye:   new THREE.MeshStandardMaterial({color:0x0B0E12, roughness:0.3})
+    };
+
+    SOLID_LIMBS.forEach(function(spec){
+      var geo = new THREE.CylinderGeometry(spec[2], spec[2], 1, 14, 1);
+      var mesh = new THREE.Mesh(geo, solidMat[spec[3]]);
+      mesh.visible = false;
+      humanGroup.add(mesh);
+      solidLimbMeshes.push({mesh:mesh, a:spec[0], b:spec[1]});
+    });
+
+    SOLID_JOINTS.forEach(function(spec){
+      var mesh = new THREE.Mesh(new THREE.SphereGeometry(spec.r, 16, 16), solidMat[spec.mat]);
+      mesh.visible = false;
+      humanGroup.add(mesh);
+      solidJointMeshes.push({mesh:mesh, idx:spec.idx});
+    });
+
+    solidHead = new THREE.Mesh(new THREE.SphereGeometry(0.115, 22, 22), solidMat.skin);
+    solidHead.visible = false;
+    humanGroup.add(solidHead);
+    solidEyeL = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 8), solidMat.eye);
+    solidEyeR = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 8), solidMat.eye);
+    solidEyeL.visible = false; solidEyeR.visible = false;
+    humanGroup.add(solidEyeL); humanGroup.add(solidEyeR);
+
+    ['L','R'].forEach(function(side){
+      var hand = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.13, 0.035), solidMat.skin);
+      hand.visible = false;
+      humanGroup.add(hand);
+      solidHandMeshes[side] = hand;
+
+      var foot = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.05, 0.21), solidMat.shoe);
+      foot.visible = false;
+      humanGroup.add(foot);
+      solidFootMeshes[side] = foot;
+    });
+
+    loadGltfHumanoid();
+
+    window.addEventListener('resize', onResize);
+    onResize();
+    animate3d();
+  }
+
+  function onResize(){
+    var w = canvas3d.parentElement.clientWidth;
+    var h = canvas3d.parentElement.clientHeight;
+    renderer.setSize(w, h, false);
+    camera3d.aspect = w/h;
+    camera3d.updateProjectionMatrix();
+  }
+
+  function animate3d(){
+    requestAnimationFrame(animate3d);
+    controls.update();
+    renderer.render(scene, camera3d);
+  }
+
+  /* =========================================================
+     6. LANDMARK -> 3D MAPPING
+  ========================================================= */
+  // NOTE: MediaPipe Holistic's JS solution does NOT expose poseWorldLandmarks
+  // (that field only exists on the standalone Pose solution). Holistic only
+  // gives us normalized poseLandmarks: x,y in ~[0,1] (image space), z roughly
+  // on the same scale as x (relative depth, hip-centered, more negative = closer
+  // to camera). We build 3D positions directly from those.
+  var AVATAR_SCALE = 2.0;
+  var AVATAR_Y_OFFSET = 1.0;
+
+  function toVec3(lm, mirror){
+    var mx = mirror ? -1 : 1;
+    return new THREE.Vector3(
+      (lm.x - 0.5) * AVATAR_SCALE * mx,
+      (-(lm.y - 0.5) * AVATAR_SCALE) + AVATAR_Y_OFFSET,
+      -lm.z * AVATAR_SCALE
+    );
+  }
+
+  function lerpVec3(target, source, alpha){
+    target.lerp(source, 1 - alpha);
+    return target;
+  }
+
+  function updateAvatarFromResults(results){
+    var landmarks = results.poseLandmarks;
+    if(!landmarks || landmarks.length === 0){
+      return false;
+    }
+
+    var alpha = state.smoothing;
+    var anyVisible = false;
+
+    for(var i=0;i<33;i++){
+      var lm = landmarks[i];
+      var mesh = jointMeshes[i];
+      if(!lm){ mesh.visible = false; continue; }
+      var vis2d = typeof lm.visibility === 'number' ? lm.visibility : 1;
+      var visible = vis2d > 0.3;
+
+      var target = toVec3(lm, state.mirror);
+      if(!state.smoothedJoints[i]) state.smoothedJoints[i] = target.clone();
+      lerpVec3(state.smoothedJoints[i], target, alpha);
+
+      mesh.position.copy(state.smoothedJoints[i]);
+      mesh.visible = visible;
+      if(visible) anyVisible = true;
+
+      var mat = mesh.material;
+      mat.emissiveIntensity = 0.4 + vis2d*0.9;
+      mat.color.setHex(vis2d > 0.6 ? 0x4fe3c1 : (vis2d > 0.3 ? 0xffb454 : 0xff5470));
+    }
+
+    // neck synth point between shoulders -> nose bone already covered via ear-nose; add torso-neck line via shoulder midpoint
+    // bones
+    boneMeshes.forEach(function(b){
+      var pa = state.smoothedJoints[b.a];
+      var pb = state.smoothedJoints[b.b];
+      var va = jointMeshes[b.a].visible, vb = jointMeshes[b.b].visible;
+      if(!pa || !pb || !va || !vb){ b.mesh.visible = false; return; }
+      var dir = new THREE.Vector3().subVectors(pb, pa);
+      var len = dir.length();
+      if(len < 0.001){ b.mesh.visible = false; return; }
+      b.mesh.visible = true;
+      var mid = new THREE.Vector3().addVectors(pa, pb).multiplyScalar(0.5);
+      b.mesh.position.copy(mid);
+      b.mesh.scale.set(1, len, 1);
+      var axis = new THREE.Vector3(0,1,0);
+      var quat = new THREE.Quaternion().setFromUnitVectors(axis, dir.clone().normalize());
+      b.mesh.quaternion.copy(quat);
+    });
+
+    // head
+    var nose = state.smoothedJoints[0];
+    if(nose && jointMeshes[0].visible){
+      headSphere.visible = true;
+      headSphere.position.copy(nose);
+      var lEar = state.smoothedJoints[7], rEar = state.smoothedJoints[8];
+      if(lEar && rEar){
+        var earDir = new THREE.Vector3().subVectors(rEar, lEar).normalize();
+        headSphere.lookAt(nose.clone().add(new THREE.Vector3().crossVectors(earDir, new THREE.Vector3(0,1,0))));
+      }
+    } else {
+      headSphere.visible = false;
+    }
+
+    updateSignalBars(landmarks);
+    return anyVisible;
+  }
+
+  var synthPoints = {};
+
+  // Drives the procedural solid model from the SKELETON's own already-computed
+  // bone/joint transforms wherever a matching skeleton segment exists, rather
+  // than recomputing positions independently. This makes divergence between
+  // the two impossible for those segments — they literally share the same
+  // transform values, just rendered with a thicker, differently-shaded mesh.
+  // Only the torso-center and neck (which the skeleton doesn't draw as a
+  // single central bone) fall back to point-based computation.
+  function updateSolidHuman(){
+    var j = state.smoothedJoints;
+    var vis = {};
+    for(var i=0;i<33;i++){ vis[i] = jointMeshes[i] ? jointMeshes[i].visible : false; }
+
+    if(j[11] && j[12]){
+      if(!synthPoints.shoulderMid) synthPoints.shoulderMid = new THREE.Vector3();
+      synthPoints.shoulderMid.addVectors(j[11], j[12]).multiplyScalar(0.5);
+    }
+    if(j[23] && j[24]){
+      if(!synthPoints.hipMid) synthPoints.hipMid = new THREE.Vector3();
+      synthPoints.hipMid.addVectors(j[23], j[24]).multiplyScalar(0.5);
+    }
+
+    function pt(key){ return typeof key === 'number' ? j[key] : synthPoints[key]; }
+    function ptVisible(key){
+      if(typeof key === 'number') return !!vis[key];
+      if(key === 'shoulderMid') return !!(vis[11] && vis[12]);
+      if(key === 'hipMid') return !!(vis[23] && vis[24]);
+      return false;
+    }
+
+    solidLimbMeshes.forEach(function(item){
+      var skelMesh = (typeof item.a === 'number' && typeof item.b === 'number')
+        ? boneMeshByPair[item.a + '-' + item.b] : null;
+
+      if(skelMesh){
+        // direct copy from the skeleton bone — guaranteed identical alignment
+        item.mesh.visible = skelMesh.visible;
+        if(skelMesh.visible){
+          item.mesh.position.copy(skelMesh.position);
+          item.mesh.quaternion.copy(skelMesh.quaternion);
+          item.mesh.scale.y = skelMesh.scale.y;
+        }
+        return;
+      }
+
+      // synthetic segments only (torso center, neck) — no 1:1 skeleton bone exists
+      var pa = pt(item.a), pb = pt(item.b);
+      if(!pa || !pb || !ptVisible(item.a) || !ptVisible(item.b)){ item.mesh.visible = false; return; }
+      var dir = new THREE.Vector3().subVectors(pb, pa);
+      var len = dir.length();
+      if(len < 0.001){ item.mesh.visible = false; return; }
+      item.mesh.visible = true;
+      var mid = new THREE.Vector3().addVectors(pa, pb).multiplyScalar(0.5);
+      item.mesh.position.copy(mid);
+      item.mesh.scale.y = len;
+      var quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+      item.mesh.quaternion.copy(quat);
+    });
+
+    solidJointMeshes.forEach(function(item){
+      var skelJoint = jointMeshes[item.idx];
+      if(!skelJoint || !skelJoint.visible){ item.mesh.visible = false; return; }
+      item.mesh.visible = true;
+      item.mesh.position.copy(skelJoint.position); // same object the skeleton itself renders
+    });
+
+    if(headSphere.visible){
+      solidHead.visible = true;
+      solidHead.position.copy(headSphere.position);
+      solidHead.quaternion.copy(headSphere.quaternion);
+      var fwd = new THREE.Vector3(0,0,1).applyQuaternion(solidHead.quaternion);
+      var right = new THREE.Vector3(1,0,0).applyQuaternion(solidHead.quaternion);
+      var up = new THREE.Vector3(0,1,0).applyQuaternion(solidHead.quaternion);
+      solidEyeL.visible = true; solidEyeR.visible = true;
+      solidEyeL.position.copy(solidHead.position).addScaledVector(right, -0.045).addScaledVector(up, 0.02).addScaledVector(fwd, 0.09);
+      solidEyeR.position.copy(solidHead.position).addScaledVector(right, 0.045).addScaledVector(up, 0.02).addScaledVector(fwd, 0.09);
+    } else {
+      solidHead.visible = false; solidEyeL.visible = false; solidEyeR.visible = false;
+    }
+
+    ['L','R'].forEach(function(side){
+      var wristIdx = side === 'L' ? 15 : 16;
+      var idxIdx = side === 'L' ? 19 : 20;
+      var box = solidHandMeshes[side];
+      var skelMesh = boneMeshByPair[wristIdx + '-' + idxIdx];
+      if(!skelMesh || !skelMesh.visible){ box.visible = false; return; }
+      box.visible = true;
+      box.position.copy(skelMesh.position); // same wrist->index midpoint the skeleton uses
+      box.quaternion.copy(skelMesh.quaternion);
+    });
+
+    ['L','R'].forEach(function(side){
+      var ankleIdx = side === 'L' ? 27 : 28;
+      var footIdx = side === 'L' ? 31 : 32;
+      var box = solidFootMeshes[side];
+      var skelMesh = boneMeshByPair[ankleIdx + '-' + footIdx];
+      if(!skelMesh || !skelMesh.visible){ box.visible = false; return; }
+      box.visible = true;
+      box.position.copy(skelMesh.position);
+      box.position.y -= 0.02;
+      // skeleton bone is oriented with its local +Y along ankle->toe; rotate
+      // that into the box's "length axis" (+Z) so it sits flat like a foot
+      var quat = skelMesh.quaternion.clone();
+      var yToZ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0));
+      box.quaternion.copy(quat).multiply(yToZ);
+    });
+  }
+
+  /* ---- rigged GLTF humanoid: load + bind-pose capture + live retargeting ---- */
+  // Resolves ROLE_TARGETS roles to actual bone Object3Ds for ANY loaded rig,
+  // trying (in order): VRM's authoritative extension mapping, exact Mixamo
+  // names, then the validated fuzzy name matcher. Never throws — roles that
+  // can't be resolved are simply left unmapped (graceful degradation).
+  function resolveHumanoidBones(root, json){
+    var boneByName = {};
+    root.traverse(function(o){ if(o.isBone) boneByName[o.name] = o; });
+
+    var neededRoles = {};
+    ROLE_TARGETS.forEach(function(rt){ neededRoles[rt.role] = 1; neededRoles[rt.ref] = 1; });
+
+    function vrmNodeIndexForRole(role){
+      if(!json || !json.extensions) return null;
+      var ext = json.extensions;
+      try{
+        if(ext.VRMC_vrm && ext.VRMC_vrm.humanoid && ext.VRMC_vrm.humanoid.humanBones){
+          var hb = ext.VRMC_vrm.humanoid.humanBones[role];
+          if(hb && typeof hb.node === 'number') return hb.node;
+        }
+        if(ext.VRM && ext.VRM.humanoid && ext.VRM.humanoid.humanBones){
+          var arr = ext.VRM.humanoid.humanBones;
+          for(var i=0;i<arr.length;i++){ if(arr[i] && arr[i].bone === role && typeof arr[i].node === 'number') return arr[i].node; }
+        }
+      } catch(e){ /* malformed extension data — fall through to other tiers */ }
+      return null;
+    }
+
+    var roleToBone = {}, roleSource = {};
+    Object.keys(neededRoles).forEach(function(role){
+      var nodeIdx = vrmNodeIndexForRole(role);
+      if(nodeIdx != null && json.nodes && json.nodes[nodeIdx]){
+        var nodeName = json.nodes[nodeIdx].name;
+        if(nodeName && boneByName[nodeName]){ roleToBone[role] = boneByName[nodeName]; roleSource[role] = 'vrm'; return; }
+      }
+      var mixamoName = MIXAMO_NAME_BY_ROLE[role];
+      if(mixamoName && boneByName[mixamoName]){ roleToBone[role] = boneByName[mixamoName]; roleSource[role] = 'mixamo'; return; }
+      var cfg = ROLE_CANDIDATES[role];
+      if(cfg){
+        var names = Object.keys(boneByName).map(function(n){ return {orig:n, norm:normalizeBoneName(n)}; });
+        var found = null;
+        for(var e=0;e<cfg.exact.length && !found;e++){
+          var hit = names.find(function(b){ return b.norm === cfg.exact[e]; });
+          if(hit) found = hit.orig;
+        }
+        for(var l=0;l<cfg.loose.length && !found;l++){
+          var hit2 = names.find(function(b){ return b.norm.indexOf(cfg.loose[l]) !== -1; });
+          if(hit2) found = hit2.orig;
+        }
+        if(found){ roleToBone[role] = boneByName[found]; roleSource[role] = 'fuzzy'; }
+      }
+    });
+    return {roleToBone:roleToBone, roleSource:roleSource, boneCount:Object.keys(boneByName).length};
+  }
+
+  // Captures each resolvable role's bind-pose direction + world orientation —
+  // the reference frame the live retargeting math rotates away from each frame.
+  function captureBindPose(root, roleToBone){
+    root.updateMatrixWorld(true);
+    var retarget = [];
+    ROLE_TARGETS.forEach(function(rt){
+      var bone = roleToBone[rt.role];
+      var refBone = roleToBone[rt.ref];
+      if(!bone || !refBone) return;
+      var boneWorldPos = new THREE.Vector3(); bone.getWorldPosition(boneWorldPos);
+      var refWorldPos = new THREE.Vector3(); refBone.getWorldPosition(refWorldPos);
+      var bindDir = new THREE.Vector3().subVectors(refWorldPos, boneWorldPos);
+      if(bindDir.lengthSq() < 1e-8) return; // coincident bones — can't establish a direction
+      bindDir.normalize();
+      retarget.push({role:rt.role, lmA:rt.lmA, lmB:rt.lmB, bindDir:bindDir, bindWorldQuat:bone.getWorldQuaternion(new THREE.Quaternion()), bone_:bone});
+    });
+    return retarget;
+  }
+
+  // Uniformly scales + repositions an arbitrary uploaded model to a sensible
+  // human height with feet on the floor — uploaded models can be authored at
+  // any scale/origin, unlike the curated Xbot asset.
+  function autoFitModel(root){
+    root.updateMatrixWorld(true);
+    var box = new THREE.Box3().setFromObject(root);
+    var size = new THREE.Vector3(); box.getSize(size);
+    if(size.y > 0.001 && isFinite(size.y)){
+      var scale = Math.max(0.001, Math.min(1.75 / size.y, 1000));
+      root.scale.multiplyScalar(scale);
+      root.updateMatrixWorld(true);
+      box.setFromObject(root);
+    }
+    var center = new THREE.Vector3(); box.getCenter(center);
+    root.position.x -= center.x;
+    root.position.z -= center.z;
+    root.position.y -= box.min.y;
+    root.updateMatrixWorld(true);
+  }
+
+  // VRM 0.x models face -Z by a historical spec quirk; VRM 1.0 corrected this
+  // to face +Z. Detect the older extension and rotate to face the camera.
+  function applyVrmFacingFix(root, json){
+    if(json && json.extensions && json.extensions.VRM && !json.extensions.VRMC_vrm){
+      root.rotation.y += Math.PI;
+      root.updateMatrixWorld(true);
+    }
+  }
+
+  function disposeObject3D(root){
+    root.traverse(function(o){
+      if(!o.isMesh) return;
+      if(o.geometry) o.geometry.dispose();
+      var mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(function(m){
+        if(!m) return;
+        Object.keys(m).forEach(function(k){ var v = m[k]; if(v && v.isTexture) v.dispose(); });
+        m.dispose();
+      });
+    });
+  }
+
+  function loadGltfHumanoid(){
+    var statEl = document.getElementById('stat-model');
+    var loader = new GLTFLoader();
+    loader.load(GLTF_MODEL_URL, function(gltf){
+      try{
+        var root = gltf.scene;
+        root.traverse(function(o){
+          if(o.isMesh && o.material && !Array.isArray(o.material)){ o.material.metalness = Math.min(o.material.metalness || 0, 0.2); }
+        });
+        root.visible = false; // stays hidden until selected in the model dropdown
+        humanGroup.add(root);
+        var json = (gltf.parser && gltf.parser.json) ? gltf.parser.json : null;
+        var resolved = resolveHumanoidBones(root, json);
+        var retarget = captureBindPose(root, resolved.roleToBone);
+        xbotHumanoid = {root:root, retarget:retarget};
+        console.log('[MOCAP] Xbot bind pose captured:', retarget.length + '/' + ROLE_TARGETS.length, 'bones mapped.');
+        var optXbot = document.getElementById('opt-xbot');
+        if(optXbot) optXbot.disabled = false;
+        setSolidModelMode(state.modelSource);
+        if(statEl) statEl.textContent = 'Xbot (rigged) — ready';
+      } catch(e){
+        console.error('[MOCAP] Error setting up Xbot, staying on procedural model:', e);
+        xbotHumanoid = null;
+        if(statEl) statEl.textContent = 'Procedural only (Xbot setup error — see console)';
+      }
+    }, function(progress){
+      if(statEl && progress && progress.total){
+        statEl.textContent = 'Loading… ' + Math.round((progress.loaded/progress.total)*100) + '%';
+      }
+    }, function(err){
+      console.error('[MOCAP] Failed to load Xbot glTF, staying on procedural model.', err);
+      if(statEl) statEl.textContent = 'Procedural only (Xbot load failed — see console)';
+    });
+  }
+
+  // Handles a user-uploaded .glb/.gltf/.vrm file end to end: validation,
+  // parsing, skeleton detection, bone resolution, auto-fit, and activation.
+  // Every failure path leaves the previously-active model untouched and
+  // reports a clear, specific message instead of failing silently.
+  function loadCustomModel(file){
+    var statusEl = document.getElementById('model-upload-status');
+    function setStatus(msg, isError){
+      if(!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? '#FF8FA3' : 'var(--text-dimmer)';
+    }
+    if(!file) return;
+    var name = file.name || 'model';
+    var ext = name.indexOf('.') !== -1 ? name.split('.').pop().toLowerCase() : '';
+    if(['glb','gltf','vrm'].indexOf(ext) === -1){
+      setStatus('Unsupported file type ".' + ext + '". Please upload a .glb or .vrm file.', true);
+      return;
+    }
+    var MAX_BYTES = 120 * 1024 * 1024;
+    if(file.size > MAX_BYTES){
+      setStatus('"' + name + '" is ' + (file.size/1048576).toFixed(0) + ' MB — please use a file under 120 MB.', true);
+      return;
+    }
+    setStatus('Reading "' + name + '"…', false);
+    var reader = new FileReader();
+    reader.onerror = function(){ setStatus('Could not read "' + name + '". Please try again.', true); };
+    reader.onload = function(){
+      setStatus('Parsing 3D model…', false);
+      var loader = new GLTFLoader();
+      try{
+        loader.parse(reader.result, '', function(gltf){
+          try{
+            var root = gltf.scene;
+            var boneCount = 0;
+            root.traverse(function(o){ if(o.isBone) boneCount++; });
+            if(boneCount === 0){
+              setStatus('"' + name + '" has no bone skeleton, so it can\'t be motion-captured. Please upload a RIGGED humanoid model.', true);
+              return;
+            }
+            var json = (gltf.parser && gltf.parser.json) ? gltf.parser.json : null;
+            applyVrmFacingFix(root, json);
+            autoFitModel(root);
+            var resolved = resolveHumanoidBones(root, json);
+            var retarget = captureBindPose(root, resolved.roleToBone);
+            console.log('[MOCAP] Custom model "' + name + '" bind pose captured:', retarget.length + '/' + ROLE_TARGETS.length, 'bones. Sources:', resolved.roleSource);
+
+            if(customHumanoid && customHumanoid.root){
+              humanGroup.remove(customHumanoid.root);
+              disposeObject3D(customHumanoid.root);
+              customHumanoid = null;
+            }
+            root.traverse(function(o){
+              if(o.isMesh && o.material && !Array.isArray(o.material)){ o.material.metalness = Math.min(o.material.metalness || 0, 0.3); }
+            });
+            root.visible = false;
+            humanGroup.add(root);
+            customHumanoid = {root:root, retarget:retarget, name:name};
+
+            var optCustom = document.getElementById('opt-custom');
+            if(optCustom){ optCustom.disabled = false; optCustom.textContent = 'Your model: ' + name; }
+            var select = document.getElementById('model-source-select');
+            if(select) select.value = 'custom';
+
+            if(retarget.length < 6){
+              setStatus('Loaded "' + name + '" but only recognized ' + retarget.length + '/' + ROLE_TARGETS.length + ' bones — this rig\'s bone names aren\'t well recognized, so tracking will be partial. Mixamo, VRM, Unity Humanoid, and Ready Player Me rigs work best.', true);
+            } else {
+              var vrmTag = (json && json.extensions && (json.extensions.VRM || json.extensions.VRMC_vrm)) ? ' (VRM)' : '';
+              setStatus('"' + name + '"' + vrmTag + ' loaded — ' + retarget.length + '/' + ROLE_TARGETS.length + ' bones mapped and tracking.', false);
+            }
+            setSolidModelMode('custom');
+          } catch(innerErr){
+            console.error('[MOCAP] Error setting up uploaded model:', innerErr);
+            setStatus('Loaded the file, but something went wrong reading its skeleton. See console for details.', true);
+          }
+        }, function(parseErr){
+          console.error('[MOCAP] Failed to parse uploaded model:', parseErr);
+          setStatus('Could not parse "' + name + '". Make sure it\'s a valid, self-contained .glb or .vrm file (not a multi-file .gltf with separate textures).', true);
+        });
+      } catch(loadErr){
+        console.error('[MOCAP] Unexpected error loading model:', loadErr);
+        setStatus('Unexpected error loading this file. See console for details.', true);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function updateRiggedHumanoid(model){
+    if(!model) return;
+    var j = state.smoothedJoints;
+    if(j[11] && j[12]){
+      if(!synthPointsGltf.shoulderMid) synthPointsGltf.shoulderMid = new THREE.Vector3();
+      synthPointsGltf.shoulderMid.addVectors(j[11], j[12]).multiplyScalar(0.5);
+    }
+    if(j[23] && j[24]){
+      if(!synthPointsGltf.hipMid) synthPointsGltf.hipMid = new THREE.Vector3();
+      synthPointsGltf.hipMid.addVectors(j[23], j[24]).multiplyScalar(0.5);
+    }
+    function getPoint(key){ return typeof key === 'number' ? j[key] : synthPointsGltf[key]; }
+    function getVisible(key){
+      if(typeof key === 'number') return !!(jointMeshes[key] && jointMeshes[key].visible);
+      if(key === 'hipMid') return !!(jointMeshes[23] && jointMeshes[23].visible && jointMeshes[24] && jointMeshes[24].visible);
+      if(key === 'shoulderMid') return !!(jointMeshes[11] && jointMeshes[11].visible && jointMeshes[12] && jointMeshes[12].visible);
+      return false;
+    }
+
+    var alpha = 1 - state.smoothing;
+    model.retarget.forEach(function(item){
+      var bone = item.bone_;
+      var pa = getPoint(item.lmA), pb = getPoint(item.lmB);
+      if(!pa || !pb || !getVisible(item.lmA) || !getVisible(item.lmB)) return;
+      var targetDir = new THREE.Vector3().subVectors(pb, pa);
+      if(targetDir.lengthSq() < 1e-6) return;
+      targetDir.normalize();
+      var deltaQuat = new THREE.Quaternion().setFromUnitVectors(item.bindDir, targetDir);
+      var newWorldQuat = deltaQuat.multiply(item.bindWorldQuat.clone());
+      var parentWorldQuat = new THREE.Quaternion();
+      bone.parent.getWorldQuaternion(parentWorldQuat);
+      var localQuat = parentWorldQuat.invert().multiply(newWorldQuat);
+      bone.quaternion.slerp(localQuat, alpha);
+      bone.updateMatrixWorld(true);
+    });
+    if(model.root) model.root.updateMatrixWorld(true);
+  }
+
+  function updateHandsFromResults(results){
+    ['L','R'].forEach(function(side){
+      var handLm = side === 'L' ? results.leftHandLandmarks : results.rightHandLandmarks;
+      var wristIdx = side === 'L' ? 15 : 16;
+      var wristPos = state.smoothedJoints[wristIdx];
+      var joints = handJointMeshes[side];
+      var lines = handBoneLines[side];
+
+      if(!state.trackHands || !handLm || !wristPos){
+        joints.forEach(function(j){ j.visible = false; });
+        lines.visible = false;
+        return;
+      }
+      var scale = 0.42;
+      var origin = handLm[0];
+      var pts = [];
+      for(var i=0;i<21;i++){
+        var mx = state.mirror ? -1 : 1;
+        var off = new THREE.Vector3(
+          (handLm[i].x - origin.x) * scale * mx,
+          -(handLm[i].y - origin.y) * scale,
+          -(handLm[i].z - origin.z) * scale
+        );
+        var p = wristPos.clone().add(off);
+        pts.push(p);
+        joints[i].position.copy(p);
+        joints[i].visible = true;
+      }
+      lines.visible = true;
+      var posAttr = lines.geometry.attributes.position;
+      HAND_BONES.forEach(function(pair, idx){
+        var a = pts[pair[0]], b = pts[pair[1]];
+        posAttr.setXYZ(idx*2, a.x, a.y, a.z);
+        posAttr.setXYZ(idx*2+1, b.x, b.y, b.z);
+      });
+      posAttr.needsUpdate = true;
+    });
+  }
+
+  /* =========================================================
+     7. MEDIAPIPE HOLISTIC
+  ========================================================= */
+  var holistic = null;
+  var mpCamera = null;
+
+  function initHolistic(){
+    holistic = new Holistic({
+      locateFile: function(file){
+        return 'https://cdn.jsdelivr.net/npm/@mediapipe/holistic/' + file;
+      }
+    });
+    holistic.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      refineFaceLandmarks: false,
+      minDetectionConfidence: state.minDetConf,
+      minTrackingConfidence: state.minTrackConf
+    });
+    holistic.onResults(onResults);
+  }
+
+  function onResults(results){
+    var now = performance.now();
+    var dt = now - state.lastFrameTime;
+    state.lastFrameTime = now;
+    state.fpsHistory.push(1000/Math.max(dt,1));
+    if(state.fpsHistory.length > 30) state.fpsHistory.shift();
+    var avgFps = state.fpsHistory.reduce(function(a,b){return a+b;},0)/state.fpsHistory.length;
+    fpsVal.textContent = avgFps.toFixed(0);
+    $('stat-frametime').innerHTML = dt.toFixed(1) + '<span>ms</span>';
+
+    state.latestResults = results;
+
+    var detected = results.poseLandmarks ? results.poseLandmarks.filter(function(l){return l.visibility>0.3;}).length : 0;
+    lmVal.textContent = detected;
+
+    if(results.poseLandmarks && detected > 5){
+      setStatus('tracking', 'TRACKING');
+      viewportHint.classList.add('hidden');
+      var conf = results.poseLandmarks.reduce(function(s,l){return s+(l.visibility||0);},0)/results.poseLandmarks.length;
+      $('stat-conf').innerHTML = Math.round(conf*100) + '<span>%</span>';
+    } else {
+      setStatus('tracking', 'SEARCHING…');
+    }
+
+    updateAvatarFromResults(results);
+    updateHandsFromResults(results);
+    if(state.showSolid){
+      if(state.modelSource === 'xbot' && xbotHumanoid){ updateRiggedHumanoid(xbotHumanoid); }
+      else if(state.modelSource === 'custom' && customHumanoid){ updateRiggedHumanoid(customHumanoid); }
+      else { updateSolidHuman(); }
+    }
+    drawOverlay(results);
+  }
+
+  function drawOverlay(results){
+    if(!state.overlay2d){ pipCtx.clearRect(0,0,pipOverlay.width, pipOverlay.height); return; }
+    pipOverlay.width = videoEl.videoWidth || 320;
+    pipOverlay.height = videoEl.videoHeight || 240;
+    pipCtx.save();
+    pipCtx.clearRect(0,0,pipOverlay.width, pipOverlay.height);
+    if(typeof drawConnectors === 'function' && results.poseLandmarks){
+      drawConnectors(pipCtx, results.poseLandmarks, Holistic.POSE_CONNECTIONS, {color:'#4FE3C1', lineWidth:2});
+      drawLandmarks(pipCtx, results.poseLandmarks, {color:'#0A0D12', fillColor:'#4FE3C1', radius:2.5, lineWidth:1});
+    }
+    if(state.trackHands && typeof drawConnectors === 'function'){
+      if(results.leftHandLandmarks){
+        drawConnectors(pipCtx, results.leftHandLandmarks, Holistic.HAND_CONNECTIONS, {color:'#FFB454', lineWidth:1.5});
+      }
+      if(results.rightHandLandmarks){
+        drawConnectors(pipCtx, results.rightHandLandmarks, Holistic.HAND_CONNECTIONS, {color:'#FF6B4A', lineWidth:1.5});
+      }
+    }
+    pipCtx.restore();
+  }
+
+  /* =========================================================
+     8. CAMERA START / STOP
+  ========================================================= */
+  function startCamera(){
+    btnToggleCam.disabled = true;
+    setStatus('loading', 'REQUESTING CAMERA…');
+    navigator.mediaDevices.getUserMedia({video:{width:640, height:480}, audio:false}).then(function(stream){
+      videoEl.srcObject = stream;
+      return videoEl.play();
+    }).then(function(){
+      $('stat-res').textContent = videoEl.videoWidth + '×' + videoEl.videoHeight;
+      mpCamera = new Camera(videoEl, {
+        onFrame: async function(){
+          await holistic.send({image:videoEl});
+        },
+        width:640, height:480
+      });
+      mpCamera.start();
+      state.running = true;
+      state.startTime = performance.now();
+      btnToggleLabel.textContent = 'Stop camera';
+      btnToggleCam.classList.remove('primary');
+      btnToggleCam.classList.add('danger');
+      btnToggleCam.disabled = false;
+      pipEl.classList.toggle('hidden', !state.showPip);
+      setSolidModelMode(state.modelSource);
+      setStatus('tracking', 'TRACKING');
+    }).catch(function(err){
+      console.error(err);
+      showError('Camera access failed: ' + (err && err.message ? err.message : 'permission denied.'));
+      setStatus('error', 'CAMERA ERROR');
+      btnToggleCam.disabled = false;
+    });
+  }
+
+  function stopCamera(){
+    if(mpCamera){ mpCamera.stop(); mpCamera = null; }
+    var stream = videoEl.srcObject;
+    if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); }
+    videoEl.srcObject = null;
+    state.running = false;
+    state.startTime = null;
+    state.latestResults = null;
+    btnToggleLabel.textContent = 'Start camera';
+    btnToggleCam.classList.add('primary');
+    btnToggleCam.classList.remove('danger');
+    pipEl.classList.add('hidden');
+    viewportHint.classList.remove('hidden');
+    setStatus('idle', 'IDLE');
+    fpsVal.textContent = '—';
+    lmVal.textContent = '0';
+    Object.keys(jointMeshes).forEach(function(k){ jointMeshes[k].visible = false; });
+    boneMeshes.forEach(function(b){ b.mesh.visible = false; });
+    headSphere.visible = false;
+    ['L','R'].forEach(function(s){
+      handJointMeshes[s].forEach(function(j){ j.visible = false; });
+      handBoneLines[s].visible = false;
+    });
+    solidLimbMeshes.forEach(function(item){ item.mesh.visible = false; });
+    solidJointMeshes.forEach(function(item){ item.mesh.visible = false; });
+    solidHead.visible = false; solidEyeL.visible = false; solidEyeR.visible = false;
+    ['L','R'].forEach(function(s){
+      solidHandMeshes[s].visible = false;
+      solidFootMeshes[s].visible = false;
+    });
+    if(xbotHumanoid) xbotHumanoid.root.visible = false;
+    if(customHumanoid) customHumanoid.root.visible = false;
+    updateSignalBars(null);
+  }
+
+  btnToggleCam.addEventListener('click', function(){
+    if(state.running) stopCamera(); else startCamera();
+  });
+
+  /* =========================================================
+     9. UPTIME TICKER
+  ========================================================= */
+  setInterval(function(){
+    if(state.running && state.startTime){
+      var secs = Math.floor((performance.now() - state.startTime)/1000);
+      $('stat-uptime').innerHTML = secs + '<span>s</span>';
+    } else {
+      $('stat-uptime').innerHTML = '0<span>s</span>';
+    }
+  }, 500);
+
+  /* =========================================================
+     10. BOOT
+  ========================================================= */
+  function boot(){
+    initThree();
+    try{
+      initHolistic();
+    } catch(e){
+      console.error(e);
+      showError('Failed to load tracking models. Check your internet connection and reload.');
+    }
+    updateSignalBars(null);
+    setTimeout(function(){
+      $('loading-overlay').classList.add('hidden');
+    }, 500);
+  }
+
+  if(document.readyState === 'complete' || document.readyState === 'interactive'){
+    setTimeout(boot, 50);
+  } else {
+    window.addEventListener('DOMContentLoaded', boot);
+  }
+
+})();
+</script>
+</body>
+</html>
