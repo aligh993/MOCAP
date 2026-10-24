@@ -1,269 +1,619 @@
 # 🕺 MOCAP — Whole-Body Webcam Motion Capture Dashboard
 
-A browser-based motion capture studio: point a webcam at yourself and a
-live wireframe skeleton plus a solid 3D character mirror your entire
-body — arms, legs, torso, head, and hands — in real time. Upload your own
-rigged 3D character and it moves with you too.
+A production-oriented, browser-only motion-capture dashboard that tracks a single person from a webcam and drives:
 
-Everything runs **100% client-side** — no backend, no server, no API
-keys. All pose estimation happens locally in your browser using
-MediaPipe. Nothing is uploaded anywhere.
+- a live 33-landmark body skeleton,
+- both 21-landmark hands,
+- a procedural solid humanoid,
+- the bundled rigged Xbot character, and
+- compatible user-supplied rigged GLB / self-contained GLTF / VRM humanoids.
 
-![status](https://img.shields.io/badge/status-experimental-orange)
-![stack](https://img.shields.io/badge/stack-vanilla%20JS%20%2B%20WebGL-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
+The application has **no backend and no build step**. Pose inference runs on-device with **MediaPipe Holistic Landmarker (Tasks Vision)** and rendering/retargeting runs in the browser with **Three.js**.
+
+> **Important privacy detail:** webcam frames and returned landmarks are processed on-device and are not uploaded by this application. The page still downloads static JavaScript/WASM/model assets from third-party CDNs, and current MediaPipe Tasks documentation states that the library may send performance/utilization metrics to Google. Review the MediaPipe privacy notice before deploying this in a regulated or consent-sensitive environment.
 
 ---
 
-## ✨ Features
+## ✨ What changed in this professional rewrite
 
-### 🧍 Dual live 3D avatars (`mocap-dashboard.html`)
-- A wireframe skeleton and a solid humanoid figure stand side by side,
-  both driven by the exact same tracking data — the solid model directly
-  copies the skeleton's own computed bone transforms, so the two can never
-  visually drift apart.
-- 33-point full-body pose plus 21-point tracking on each hand, via
-  [MediaPipe Holistic](https://developers.google.com/mediapipe) — arms,
-  legs, torso, head orientation, and individual finger spread all track
-  live.
-- Glowing joints and bones color-code per-limb tracking confidence in
-  real time (teal → amber → red as confidence drops).
-- Orbit-controllable 3D viewport — drag to rotate, scroll to zoom, toggle
-  the floor grid, auto-rotate, or reset the camera to a default framing.
+This version is a substantial engineering rewrite of the original single-file prototype rather than a visual-only refresh.
 
-### 🤖 Built-in realistic model
-- A free, properly rigged humanoid ("Xbot") loads in the background as an
-  alternative to the procedural figure — real bone-based forward
-  kinematics, not just repositioned shapes.
+### Tracking engine
 
-### 📤 Bring your own 3D model
-- Upload any **rigged** `.glb` or `.vrm` humanoid character and it
-  animates with your movement.
-- Automatic bone-name recognition across a three-tier resolver: the
-  **VRM standard's** official bone mapping, **exact Mixamo names**, then a
-  validated **fuzzy matcher** covering Unity Humanoid, Ready Player Me,
-  Blender `.L`/`.R` suffixes, and raw VRM (`J_Bip_`) naming — tested
-  against real rigs with zero false positives on unrelated bone/prop
-  names.
-- Auto-scales and repositions any uploaded model to a sensible height
-  with feet on the floor, corrects the known VRM 0.x backward-facing
-  quirk, and reports exactly how many bones were recognized — with a
-  clear, specific message for every failure case (no skeleton found,
-  unsupported file type, oversized file, corrupt/unparseable file)
-  instead of failing silently.
+- Migrated from the **legacy `@mediapipe/holistic` solution** to the current **MediaPipe Tasks Vision `HolisticLandmarker`** API.
+- Uses **pose world landmarks** when available, instead of approximating all 3D positions from normalized image-space `x/y/z` values.
+- Falls back from the **GPU delegate to CPU** automatically when GPU initialization is unavailable.
+- Uses `requestVideoFrameCallback()` when supported, with `requestAnimationFrame()` as a fallback.
+- Owns exactly **one `getUserMedia()` stream**; there is no second camera helper competing for the same `<video>` element.
+- Uses frame-rate-independent exponential smoothing, so the same smoothing setting behaves consistently across different camera/inference frame rates.
+- Includes a short tracking-loss grace window to reduce visible one-frame flicker.
 
-### 🎛️ Live tracking dashboard
-- FPS, tracked-landmark count, camera resolution, average confidence, and
-  frame time, updated live.
-- Per-joint "tracking signal" bars (shoulders, elbows, wrists, hips,
-  knees, ankles) — an at-a-glance readout of exactly which limbs are
-  confidently tracked right now.
-- Detection/tracking confidence sliders and an adjustable motion
-  smoothing control.
-- A small picture-in-picture source feed with an optional 2D
-  landmark/skeleton overlay.
+### 3D / retargeting
 
-### 💾 Export
-- Download the current frame's raw pose landmark data as JSON.
+- Updated to **Three.js 0.186.1** with pinned CDN URLs.
+- Improved rigged-model retargeting with a tracked pelvis/body frame, giving the hips a more stable yaw/roll orientation instead of only pointing a single bone direction.
+- Preserves bind-pose twist while retargeting limb directions.
+- Stores bind-pose local quaternions and resets loaded characters cleanly when capture stops.
+- Uses stricter bone-role matching to prefer a missing role over an obviously wrong arbitrary bone.
+- Supports common compressed GLTF assets through:
+  - DRACO,
+  - KTX2/Basis textures, and
+  - Meshopt decoding.
+- Disposes geometries, materials, and textures when replacing uploaded characters.
+
+### Camera and runtime robustness
+
+- Secure-context checks (`https://` or `localhost`) before requesting the camera.
+- Clear handling for denied permission, missing camera, busy camera, and incompatible constraints.
+- No duplicate camera acquisition.
+- Cancels scheduled video-frame callbacks on stop.
+- Cleans up MediaStream tracks, MediaPipe, Three.js loaders, renderer resources, and uploaded assets on page unload.
+- Pinned dependency versions prevent an unannounced CDN `latest` release from changing behavior overnight.
+
+### Upload pipeline
+
+- `.glb` and `.vrm` are correctly read as binary.
+- `.gltf` is correctly read as text JSON.
+- Self-contained GLTF files are supported.
+- A single `.gltf` file that references separate `.bin` or texture sidecars is intentionally not supported by the one-file upload control; export a self-contained `.glb` instead.
+- Rejects models without a skeleton.
+- Rejects oversized uploads (>120 MB).
+- Requires a minimum number of resolvable driven roles before activating an uploaded rig.
+- Auto-fits arbitrary character scale and places feet on the floor.
+- Handles the legacy VRM 0.x facing convention.
+
+### UX / accessibility
+
+- Switches are real keyboard-focusable buttons with `role="switch"` and `aria-checked`.
+- Status and error messages use live regions.
+- Improved responsive layout for tablets/mobile widths.
+- Honors `prefers-reduced-motion`.
+- Camera preview mirroring is visualized consistently with the 3D mirror setting.
+- Export is disabled until valid tracking data exists.
 
 ---
 
 ## 📁 Project structure
 
-```
+```text
 .
-├── mocap-dashboard.html   # The entire application — single file, no build step
-└── README.md
+├── index.html                 # Convenience redirect to the dashboard
+├── mocap-dashboard.html       # Application markup / import map / controls
+├── assets/
+│   └── styles.css             # Responsive dashboard styling
+├── src/
+│   ├── bootstrap.js           # Early startup/module error reporting
+│   └── app.js                 # Tracking, rendering, retargeting, upload logic
+├── scripts/
+│   ├── validate.py            # Zero-dependency static validation
+│   └── build_single_file.py   # Builds the standalone distribution HTML
+├── dist/
+│   └── mocap-dashboard.single.html
+├── CHANGELOG.md
+├── README.md
+└── LICENSE
 ```
 
-Everything — markup, styling, and logic — lives in one self-contained
-HTML file. Open it (via a local server, see below) and go.
+There is intentionally **no JavaScript bundler and no `npm install` step**. The source is split into maintainable files but still runs as a static site. `dist/mocap-dashboard.single.html` is a generated single-file build for users who prefer the original one-file deployment style.
 
 ---
 
-## 🚀 Getting started
+## 🚀 Quick start
 
 ### Requirements
-- A modern desktop browser — **Chrome or Edge recommended** (WebGL2,
-  `getUserMedia`, and ES module support required).
-- A webcam.
-- An internet connection on first load (MediaPipe, Three.js, and the
-  built-in Xbot model are fetched from public CDNs at runtime).
 
-### Important: run it from a local server, not `file://`
-Camera access (`getUserMedia`) and ES module imports both require a
-**secure context**. A double-clicked `file://` page doesn't count, so the
-webcam and 3D libraries will silently fail to load. Serve the folder
-instead:
+Use a modern browser with:
+
+- ES modules + import maps,
+- WebGL,
+- WebAssembly,
+- `getUserMedia()`, and
+- a webcam.
+
+Chrome/Chromium or Edge are the primary recommended desktop browsers. Safari can also run MediaPipe Tasks on supported versions, but device/GPU behavior can differ.
+
+An internet connection is required to download the pinned MediaPipe/Three.js runtime files, the Holistic model bundle, fonts, and optional Xbot character unless you vendor those assets locally.
+
+### Run through a local server
+
+Do **not** double-click the HTML file and run it from `file://`.
+
+From the project directory:
 
 ```bash
-# from the project folder
 python -m http.server 8000
-# then open:
+```
+
+Then open:
+
+```text
+http://localhost:8000/
+```
+
+or directly:
+
+```text
 http://localhost:8000/mocap-dashboard.html
 ```
 
-Any other static server works too (`npx serve`, VS Code's Live Server,
-GitHub Pages, Netlify, Vercel, etc.) — `localhost` and `https://` both
-count as secure contexts.
+Other static servers are also fine, for example VS Code Live Server, `npx serve`, Caddy, nginx, GitHub Pages, Netlify, or Vercel.
 
-### First run
-1. Open `mocap-dashboard.html` via `http://localhost:...`. It boots the
-   tracking models (a couple of seconds) while the built-in Xbot model
-   loads quietly in the background.
-2. Click **Start camera** and grant webcam permission.
-3. Move — the skeleton and solid model should track your whole body live.
-4. Optionally, switch the **Active model** dropdown to Xbot, or click
-   **Upload your 3D model** to drive your own rigged character instead.
+### Single-file distribution
+
+You can serve the generated file directly:
+
+```text
+dist/mocap-dashboard.single.html
+```
+
+Rebuild it after editing source files with:
+
+```bash
+python scripts/build_single_file.py
+```
 
 ---
 
-## 🧠 How it works
+## 🎮 Usage
 
-### Tracking
-1. [MediaPipe Holistic](https://developers.google.com/mediapipe) runs a
-   pose + hand landmark model on each webcam frame, entirely client-side
-   via WebAssembly/WebGL, returning 33 body landmarks (with visibility
-   confidence) plus 21 landmarks per hand.
-2. Every tracked point is exponentially smoothed frame-to-frame to reduce
-   jitter without adding noticeable lag.
-3. Points are mapped from MediaPipe's normalized image space into 3D
-   world space for rendering.
-
-### Skeleton & solid model
-The skeleton renders joints and bones directly from the smoothed
-landmark positions. The procedural solid model then **copies those exact
-same computed transforms** — position, rotation, and length — for every
-matching limb, rather than recalculating independently. The two are
-structurally incapable of drifting apart, because they're reading the
-same values.
-
-### Rigged models (Xbot / uploaded)
-A rigged character has fixed bone lengths, so it can't simply be
-repositioned like the procedural model. Instead, each frame computes the
-*rotation* needed to swing each bone from its bind-pose direction to the
-direction implied by live tracking, applied as proper parent-to-child
-forward kinematics — an elbow bends relative to the already-rotated upper
-arm, not in isolation.
-
-### Custom model bone resolution
-For an uploaded model, each of ~13 tracked bone roles (hips, upper/lower
-arms, hands, upper/lower legs, feet) is resolved by trying, in order: the
-VRM extension's authoritative bone mapping, exact Mixamo bone names, then
-a fuzzy name matcher validated against several real-world rig-naming
-conventions.
+1. Open the page from `localhost` or HTTPS.
+2. Wait for **MediaPipe Tasks** to initialize.
+3. Click **Start camera**.
+4. Grant camera permission.
+5. Stand far enough back that shoulders, hips, knees, and feet can be seen.
+6. The skeleton and procedural humanoid will begin tracking.
+7. Optional:
+   - choose **Realistic — Xbot** after it finishes loading,
+   - upload a rigged character,
+   - change detection/presence thresholds,
+   - adjust motion smoothing,
+   - toggle hands, PIP, landmarks, grid, mirroring, or auto-rotation,
+   - export the current pose as JSON.
 
 ---
 
-## 🔒 Privacy
+## 🧠 Architecture
 
-- Webcam video and all pose/landmark data **never leave your browser** —
-  there is no backend, no analytics, and no network calls other than
-  fetching the static MediaPipe/Three.js/model files on first load
-  (cached by the browser afterward).
-- Uploaded 3D models are read and parsed entirely in-browser via
-  `FileReader` — they are never transmitted anywhere.
-- Nothing is stored in cookies or `localStorage`; closing the tab clears
-  everything.
+### 1. MediaPipe Tasks Vision
+
+The app initializes `HolisticLandmarker` in `VIDEO` mode.
+
+Pinned package:
+
+```text
+@mediapipe/tasks-vision 1.0.1
+```
+
+Pinned model:
+
+```text
+holistic_landmarker/float16/1/holistic_landmarker.task
+```
+
+Initialization first attempts a **GPU delegate** and falls back to **CPU** if needed.
+
+The live result is normalized into the first detected subject:
+
+- `poseLandmarks[0]`
+- `poseWorldLandmarks[0]`
+- `leftHandLandmarks[0]`
+- `leftHandWorldLandmarks[0]`
+- `rightHandLandmarks[0]`
+- `rightHandWorldLandmarks[0]`
+
+Holistic Landmarker is used as a **single-person** motion-capture source in this project.
+
+### 2. Pose world-space mapping
+
+When world landmarks are present, body points are rendered from MediaPipe's metric 3D output and converted into Three.js coordinates:
+
+```js
+new THREE.Vector3(
+  world.x * mirrorFactor,
+  -world.y + hipHeight,
+  -world.z,
+)
+```
+
+Normalized pose coordinates remain as a defensive fallback.
+
+This is materially better than treating image-space normalized depth as a complete body-space reconstruction.
+
+### 3. Smoothing
+
+Instead of a fixed per-frame interpolation coefficient, smoothing is converted into a time constant and applied using elapsed milliseconds:
+
+```text
+alpha = 1 - exp(-dt / tau)
+```
+
+That makes filtering much less dependent on whether the machine is currently tracking at 18 FPS or 55 FPS.
+
+### 4. Skeleton renderer
+
+The skeleton uses:
+
+- 33 body joint spheres,
+- cylinders for body bones,
+- 21 joint markers per hand,
+- line segments for hand bones,
+- confidence-driven joint coloring.
+
+All body geometry is generated once and updated in place.
+
+### 5. Procedural solid model
+
+The procedural avatar does not independently re-solve already available body segments.
+
+Where possible, it copies the skeleton bone's exact:
+
+- position,
+- quaternion, and
+- length.
+
+Only synthetic central segments such as the torso center are computed separately.
+
+### 6. Rigged GLTF / VRM retargeting
+
+A loaded character goes through:
+
+1. skeleton discovery,
+2. role resolution,
+3. auto-fit,
+4. bind-pose capture,
+5. live directional retargeting.
+
+Role resolution tries:
+
+1. VRM humanoid mappings,
+2. exact Mixamo names,
+3. curated normalized aliases.
+
+The pelvis uses a 3D body frame based on:
+
+- left/right hips, and
+- hip midpoint → shoulder midpoint.
+
+Limb bones use bind-direction → tracked-direction quaternion deltas and are converted back to parent-local rotations before being applied.
 
 ---
 
-## 🛠️ Customization
+## 🤖 Supported character files
 
-**Tune avatar scale/positioning** — near the top of the 3D-mapping code:
+### Recommended
+
+Use a **self-contained rigged `.glb`** whenever possible.
+
+Also supported:
+
+- `.vrm`
+- self-contained `.gltf` with embedded resources/data URIs
+
+### Requirements
+
+The character must contain a real bone skeleton. A static mesh cannot be motion-captured by this project.
+
+Best compatibility is expected with rigs based on conventions such as:
+
+- VRM humanoid,
+- Mixamo,
+- Unity-style humanoid naming,
+- common Blender left/right naming,
+- common `J_Bip_*` names.
+
+### Compression support
+
+The loader is configured for:
+
+- `KHR_draco_mesh_compression`,
+- KTX2/Basis texture transcoding, and
+- Meshopt-compressed geometry.
+
+### Multi-file GLTF
+
+A `.gltf` file may reference sibling files such as:
+
+```text
+character.gltf
+character.bin
+body.png
+```
+
+A browser `<input type="file">` selecting only `character.gltf` does not provide those sibling files to `GLTFLoader`.
+
+For reliable uploads, export:
+
+```text
+character.glb
+```
+
+instead.
+
+---
+
+## 💾 Export format
+
+**Export pose JSON** writes the most recent valid tracking frame.
+
+The output includes:
+
+```json
+{
+  "timestamp": "...",
+  "videoTimestampMs": 12345.67,
+  "engine": {
+    "task": "MediaPipe Holistic Landmarker",
+    "packageVersion": "1.0.1",
+    "delegate": "GPU"
+  },
+  "poseLandmarks": [],
+  "poseWorldLandmarks": [],
+  "leftHandLandmarks": [],
+  "leftHandWorldLandmarks": [],
+  "rightHandLandmarks": [],
+  "rightHandWorldLandmarks": []
+}
+```
+
+No camera image is included in the export.
+
+---
+
+## 🎛️ Controls
+
+### Pose detection confidence
+
+Controls MediaPipe's pose/face detection threshold used when configuring Holistic Landmarker.
+
+Higher values can reduce false detections but may make acquisition harder under poor lighting or partial occlusion.
+
+### Pose/hand presence confidence
+
+Applied to:
+
+- pose presence confidence, and
+- hand landmark presence confidence.
+
+Higher values are stricter.
+
+### Motion smoothing
+
+- `0.00` → fastest response / most visible jitter
+- `0.95` → strongest filtering / more latency
+
+A middle value is normally the best starting point.
+
+---
+
+## 🔒 Privacy and network behavior
+
+### What this application does not do
+
+There is no project-owned:
+
+- backend,
+- account system,
+- database,
+- analytics endpoint,
+- webcam upload endpoint, or
+- landmark upload endpoint.
+
+Uploaded 3D model files are read with browser file APIs and parsed in the page.
+
+### Network requests that do occur
+
+Unless you vendor dependencies locally, the browser downloads static assets from:
+
+- jsDelivr — Three.js and MediaPipe Tasks runtime/WASM,
+- Google Storage — MediaPipe Holistic model,
+- Google Fonts — optional typography,
+- GitHub raw content (pinned Three.js `r186` tag) — bundled Xbot GLB.
+
+Current MediaPipe Tasks documentation additionally states that its APIs can send library **performance and utilization metrics** to Google, while input media processing remains on-device.
+
+If your deployment requires zero third-party runtime network traffic, vendor all dependencies/models/fonts locally and evaluate the MediaPipe telemetry/privacy requirements for your environment.
+
+---
+
+## 🧰 Dependency pins
+
+| Component | Version / asset |
+|---|---|
+| Three.js | `0.186.1` |
+| MediaPipe Tasks Vision | `1.0.1` |
+| Holistic model | `float16/1/holistic_landmarker.task` |
+| Xbot | Three.js `0.186.1` example asset |
+
+Pinned versions are deliberate. Upgrade them intentionally and re-test the application rather than replacing them with `@latest`.
+
+---
+
+## 🧪 Validation
+
+Run the included validator:
+
+```bash
+python scripts/validate.py
+```
+
+It checks:
+
+
+- JavaScript syntax with `node --check`,
+- missing DOM IDs referenced by JavaScript,
+- toggle keys that do not exist in application state,
+- missing local source/style files,
+- accidental duplicate camera ownership in source,
+- correct binary-vs-text upload handling paths,
+- pinned runtime dependencies, and
+- removal of the legacy MediaPipe camera/Holistic code paths.
+
+A real camera/inference integration test still needs to be run in a browser with network access and a webcam because those capabilities are unavailable in a restricted build sandbox.
+
+---
+
+## 🛠️ Configuration
+
+Most runtime constants are centralized at the top of `src/app.js`:
+
 ```js
-var AVATAR_SCALE = 2.0;      // overall size of the tracked skeleton/solid model
-var AVATAR_Y_OFFSET = 1.0;   // vertical offset so feet land near the floor
+const CONFIG = Object.freeze({
+  threeVersion: "0.186.1",
+  mediaPipeVersion: "1.0.1",
+  maxUploadBytes: 120 * 1024 * 1024,
+  avatarHipHeight: 1.0,
+  normalizedFallbackScale: 2.0,
+  minRenderVisibility: 0.3,
+  trackingLossGraceMs: 280,
+  longTrackingLossResetMs: 1200,
+  maxPixelRatio: 2,
+});
 ```
 
-**Tune default tracking behavior** — in the `state` object:
+### Upload size
+
+Change:
+
 ```js
-smoothing:   0.55,  // higher = smoother but less responsive
-minDetConf:  0.5,   // MediaPipe minimum detection confidence
-minTrackConf:0.5,   // MediaPipe minimum tracking confidence
+maxUploadBytes: 120 * 1024 * 1024
 ```
-All three are also adjustable live from the sidebar sliders.
 
-**Swap the built-in realistic model** — change the source URL:
+### Avatar height / vertical placement
+
+Change:
+
 ```js
-var GLTF_MODEL_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Xbot.glb';
+avatarHipHeight: 1.0
 ```
 
-**Adjust the custom-upload file size limit**:
+### Tracking-loss grace
+
+Change:
+
 ```js
-var MAX_BYTES = 120 * 1024 * 1024; // 120 MB
+trackingLossGraceMs: 280
 ```
 
-**Extend bone-name recognition for a new rig convention** — add candidate
-names to `ROLE_CANDIDATES`, keyed by canonical role (`leftUpperArm`,
-`rightLowerLeg`, etc.), split into `exact` (strict) and `loose`
-(substring) match tiers.
+### Long tracking-loss reset
 
-**Re-theme the colors** — the stylesheet uses CSS custom properties at
-the top of the `<style>` block:
-```css
---bg:#0A0D12;
---accent:#4FE3C1;
---warn:#FF6B4A;
---amber:#FFB454;
---red:#FF5470;
+After a prolonged loss, stale smoothed coordinates are discarded:
+
+```js
+longTrackingLossResetMs: 1200
 ```
-Swap the palette to restyle the whole dashboard in one place.
+
+### Device pixel ratio cap
+
+For low-power hardware you can reduce:
+
+```js
+maxPixelRatio: 2
+```
+
+to `1` or `1.5` to lower rendering cost.
+
+---
+
+## 🧯 Troubleshooting
+
+### Camera button stays unavailable / startup failed
+
+Check the browser console and confirm that the page can download:
+
+- MediaPipe Tasks Vision,
+- MediaPipe WASM files,
+- the Holistic model.
+
+Corporate firewalls, content blockers, strict CSP rules, or offline operation can block those assets.
+
+### Camera permission denied
+
+Use the browser's site-permission UI to allow the camera, then reload or press **Start camera** again.
+
+### Camera works on localhost but not on another HTTP host
+
+`getUserMedia()` requires a secure context. Use HTTPS in production.
+
+### Very low FPS
+
+Try:
+
+- closing GPU-heavy tabs/apps,
+- better lighting,
+- a lower-resolution camera source at the OS/browser level,
+- reducing `maxPixelRatio`,
+- using the procedural model,
+- disabling PIP/2D overlay if necessary.
+
+The Holistic model still computes its configured holistic outputs; the **Track hands** switch controls this application's hand visualization/retarget usage, not the internal cost of the Holistic model graph.
+
+### Uploaded character bends incorrectly
+
+Likely causes:
+
+- non-humanoid hierarchy,
+- unusual bind pose,
+- unsupported bone naming,
+- missing arm/leg/hand/toe roles,
+- negative/non-uniform transforms embedded in the rig,
+- a character authored with a substantially different forward axis.
+
+Check the upload message for the number of driven limb roles that were mapped.
+
+### GLTF references missing files
+
+Export the asset as a single `.glb`.
 
 ---
 
 ## ⚠️ Known limitations
 
-- **Sandboxed previews** (e.g. viewing this inside a chat product's
-  inline preview) typically block camera access entirely for security
-  reasons. Download the file and serve it yourself as described above.
-- **Rigged models don't move root position** — the Xbot/uploaded
-  character's limbs rotate with you, but the character stays planted in
-  place; walking sideways won't make it slide across the floor.
-- **Single-person tracking only** — MediaPipe Holistic tracks one person
-  per frame.
-- **Fuzzy bone-name matching isn't guaranteed** for every possible custom
-  rig — highly nonstandard bone naming may result in partial tracking; the
-  upload status line always reports exactly how many bones were
-  recognized.
-- **Multi-file `.gltf` exports** (with separate `.bin`/texture files)
-  aren't supported by the single-file upload dialog — export as
-  self-contained `.glb` instead.
-- **Lighting and webcam quality** materially affect tracking accuracy —
-  confidence will visibly drop in poor lighting or with a low-quality
-  camera.
-- **VRM support covers skeletal tracking only** — spring bones and facial
-  expression blendshapes from the VRM spec aren't implemented.
+- Single-person tracking.
+- No root translation / locomotion solving for rigged characters; the character remains planted while bones rotate.
+- No inverse-kinematics foot locking.
+- No temporal motion prediction.
+- No face mesh rendering or facial blendshape driving in the UI.
+- No VRM spring-bone simulation.
+- No VRM expression mapping.
+- Custom rigs with unusual topology/naming may still require a project-specific mapping table.
+- The browser main thread performs inference and Three.js updates; a Worker/OffscreenCanvas architecture would be the next step for a much larger production application.
 
 ---
 
-## 🧰 Tech stack
+## 🔧 Production hardening ideas
 
-| Piece | Library | Purpose |
-|---|---|---|
-| 3D rendering | [Three.js](https://threejs.org/) (r160) | Avatars, camera, lighting, `GLTFLoader`, `OrbitControls` |
-| Body & hand tracking | [MediaPipe Holistic](https://developers.google.com/mediapipe) | 33-point body pose + 21-point hand landmarks |
-| Fonts | [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk), [JetBrains Mono](https://www.jetbrains.com/lp/mono/) | Dashboard typography |
+For a public production deployment, consider additionally:
 
-No build step, no bundler, no `npm install` — every dependency loads from
-a CDN via `<script>`/`import` at runtime.
+- vendoring dependencies instead of loading from public CDNs,
+- serving a strict Content Security Policy,
+- adding Subresource Integrity where practical,
+- hosting the MediaPipe model yourself,
+- adding Playwright end-to-end tests with mocked camera media,
+- adding telemetry only with explicit product/privacy requirements,
+- moving ML inference to a Worker if supported by your target browser matrix,
+- adding explicit device selection for multi-camera systems,
+- implementing a calibration/T-pose step for arbitrary custom rigs,
+- adding IK foot locking and root-motion estimation.
 
 ---
 
 ## 📄 License
 
-MIT — do whatever you'd like with this, a credit back to the repo is
-appreciated but not required. 
+MIT. See [`LICENSE`](./LICENSE).
 
-Third-party assets keep their own licenses: the bundled **Xbot** model
-ships with [three.js](https://github.com/mrdoob/three.js)'s MIT-licensed
-example assets (originally Mixamo-rigged); **MediaPipe** is Apache 2.0;
-**Three.js** is MIT.
+Third-party software/assets retain their own licenses, including:
+
+- MediaPipe — Apache 2.0,
+- Three.js — MIT,
+- Xbot example asset — distributed with the Three.js examples; review upstream asset/license information for your deployment.
 
 ---
 
 ## 🙏 Credits
 
-Built on [MediaPipe](https://developers.google.com/mediapipe) and
-[Three.js](https://threejs.org/). Not affiliated with or endorsed by
-Google, Mixamo/Adobe, or any 3D model marketplace referenced above.
+Built with:
+
+- [MediaPipe](https://developers.google.com/edge/mediapipe/solutions/vision/holistic_landmarker/web_js)
+- [Three.js](https://threejs.org/)
+
+This project is not affiliated with or endorsed by Google, Adobe/Mixamo, or the Three.js project.
