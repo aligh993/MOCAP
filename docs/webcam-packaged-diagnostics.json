@@ -1,0 +1,76 @@
+{
+  "schema": "mocap-diagnostics",
+  "version": 1,
+  "applicationVersion": "3.1.0",
+  "timestamp": "2026-10-26T19:53:02.579Z",
+  "camera": {
+    "label": "USB2.0 HD UVC WebCam (322e:2233)",
+    "width": 1280,
+    "height": 720,
+    "frameRate": 30
+  },
+  "preset": "precision",
+  "profile": "precision",
+  "delegate": "GPU",
+  "execution": "Worker",
+  "statistics": {
+    "samples": 120,
+    "durationMs": 15407.899999976158,
+    "fps": 7.723310769162841,
+    "inference": {
+      "medianMs": 49.299999952316284,
+      "p95Ms": 138.29999995231628,
+      "meanMs": 72.17000000178814
+    },
+    "pipeline": {
+      "medianMs": 50.200000047683716,
+      "p95Ms": 139.39999997615814,
+      "meanMs": 73.1708333303531
+    },
+    "components": {
+      "body": {
+        "medianMs": 27.399999976158142,
+        "p95Ms": 73.10000002384186,
+        "meanMs": 36.52833333114783
+      },
+      "face": {
+        "medianMs": 13.299999952316284,
+        "p95Ms": 36,
+        "meanMs": 19.520833339293798
+      },
+      "handPreparation": {
+        "medianMs": 0,
+        "p95Ms": 0.10000002384185791,
+        "meanMs": 0.0066666672627131145
+      },
+      "hands": {
+        "medianMs": 9.800000071525574,
+        "p95Ms": 32.09999990463257,
+        "meanMs": 16.07083332935969
+      }
+    },
+    "availability": {
+      "face": 0.975,
+      "bothHands": 0,
+      "visibleFeet": 0
+    },
+    "last": {
+      "at": 96880.69999992847,
+      "inferenceMs": 143.10000002384186,
+      "latencyMs": 143.79999995231628,
+      "components": {
+        "body": 78,
+        "face": 36.299999952316284,
+        "handPreparation": 0,
+        "hands": 28.800000071525574
+      },
+      "handInput": "full frame",
+      "face": 478,
+      "hands": 0,
+      "feetVisible": false
+    }
+  },
+  "handDetailMode": "temporal full-frame",
+  "notes": "Detection availability is not geometric accuracy. This file contains no images, video, landmarks, or device IDs.",
+  "testContext": "Generated HTML build; physical webcam; variable framing. Aggregate timing only; no images or landmarks."
+}

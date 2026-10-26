@@ -1,176 +1,368 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#0a0d12">
-  <meta name="referrer" content="no-referrer">
-  <title>MOCAP // Whole-Body Motion Capture Dashboard</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <meta name="color-scheme" content="dark">
+
+  <meta name="theme-color" content="#0a0d12">
+
+  <meta name="referrer" content="no-referrer">
+
+  <title>MOCAP v3.1 // Whole-Body Motion Capture Dashboard</title>
+
+
+
+
   <link rel="stylesheet" href="./assets/styles.css">
 
   <script type="importmap">
+
   {
+
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
-      "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs"
+
+      "three": "./vendor/three/build/three.module.js",
+
+      "three/addons/": "./vendor/three/examples/jsm/",
+
+      "@mediapipe/tasks-vision": "./vendor/mediapipe/vision_bundle.mjs"
+
     }
+
   }
+
   </script>
+
 </head>
+
 <body>
+
   <noscript>
+
     <div class="fatal-noscript">This application requires JavaScript.</div>
+
   </noscript>
 
   <div id="loading-overlay" aria-live="polite" aria-busy="true">
+
     <div class="loader-ring" aria-hidden="true"></div>
+
     <p id="loading-message">INITIALIZING TRACKING ENGINE…</p>
+
   </div>
 
   <div id="app">
+
     <header class="app-header">
+
       <div class="brand" aria-label="MOCAP whole-body webcam motion capture">
+
         <div class="brand-mark" aria-hidden="true"></div>
+
         <div class="brand-text">
-          <strong>MOCAP</strong>
-          <span>WHOLE-BODY WEBCAM MOTION CAPTURE</span>
+
+          <strong>MOCAP <small>STUDIO / 03</small></strong>
+
+          <span>REAL-TIME MOTION · LOCAL PROCESSING</span>
+
         </div>
+
       </div>
 
       <div class="header-right">
+
         <div class="fps-readout" aria-label="Tracking performance">
+
           <span>FPS <strong id="fps-val">—</strong></span>
+
           <span>LANDMARKS <strong id="lm-val">0</strong>/33</span>
+
         </div>
+
         <div class="status-pill idle" id="status-pill" role="status" aria-live="polite">
+
           <span class="status-dot" aria-hidden="true"></span>
+
           <span id="status-text">INITIALIZING</span>
+
         </div>
+
       </div>
+
     </header>
 
     <main>
+
       <section id="viewport-wrap" aria-label="3D motion-capture viewport">
+
         <canvas id="canvas3d"></canvas>
 
         <div class="axis-tag" aria-hidden="true">
+
           RIG — <strong>SKELETON + SOLID MODEL</strong><br>
+
           SPACE — WORLD LANDMARKS, HIP-CENTERED<br>
+
           DRAG TO ORBIT · SCROLL TO ZOOM
+
         </div>
 
         <div id="viewport-hint">
+
           <div class="hint-ring" aria-hidden="true">
+
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+
               <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>
+
             </svg>
+
           </div>
-          <h1>No camera signal</h1>
-          <p>Start the camera to track a single person. Pose and hand inference runs locally in your browser with MediaPipe Tasks.</p>
+
+          <h1>Your motion, in real time.</h1>
+
+          <p>Inspect the ready-to-use character, start your camera or analyze a local photo. All capture and recording stays in your browser.</p>
+
         </div>
 
         <div id="err-banner" role="alert" aria-live="assertive"></div>
 
         <div id="pip" class="hidden" aria-label="Camera preview">
+
           <video id="input-video" autoplay playsinline muted></video>
+
           <canvas id="pip-overlay"></canvas>
+
           <div class="pip-label"><span class="rec-dot" aria-hidden="true"></span>SOURCE FEED</div>
+
         </div>
+
       </section>
 
       <aside id="sidebar" aria-label="Motion capture controls">
+
         <section class="panel-section">
+
           <h2>Capture</h2>
+
           <button class="btn primary" id="btn-toggle-cam" type="button" disabled>
+
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+
               <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+
             </svg>
+
             <span id="btn-toggle-label">Start camera</span>
+
           </button>
+
+          <div class="field-group"><label for="camera-select">Camera device</label><select id="camera-select"><option value="">Default camera</option></select></div>
+
+          <label class="helper-text checkbox-row"><input id="guided-hands" type="checkbox"> Pose-guided hand detail (extra compute)</label>
+          <p class="helper-text" id="camera-source-info" role="status">No active camera</p>
+          <p class="helper-text" id="capture-guide" role="status">Keep your face, hands and feet inside the camera frame.</p>
+          <div class="field-group"><label for="engine-profile">Tracking pipeline</label><select id="engine-profile"><option value="precision" selected>Precision · Heavy body + face + hands</option><option value="holistic">Efficient · Integrated Holistic</option></select></div>
+          <div class="field-group"><label for="quality-select">Processing quality</label><select id="quality-select"><option value="performance">Performance · 640 px / 20 fps</option><option value="balanced" selected>Balanced · 960 px / 30 fps</option><option value="quality">Quality · 1280 px / 30 fps</option><option value="precision">Maximum detail · 1920 px / 15 fps</option></select></div>
+
+          <button class="btn ghost" id="btn-photo" type="button">Analyze a local photo</button>
+          <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <button class="btn ghost" id="btn-preload" type="button">Preload tracking engine</button>
+          <div class="btn-row"><button class="btn ghost" id="btn-fullscreen" type="button">Fullscreen</button></div>
+
           <div class="btn-row">
-            <button class="btn ghost" id="btn-export" type="button" disabled>Export pose JSON</button>
+
+            <button class="btn ghost" id="btn-export" type="button" disabled>Export frame JSON</button>
+
             <button class="btn ghost" id="btn-reset-view" type="button">Reset view</button>
+
           </div>
+
         </section>
 
         <section class="panel-section">
+
+          <h2>Session recorder <span class="section-badge">NEW</span></h2>
+
+          <button class="btn ghost" id="btn-record" type="button" disabled>Record session</button>
+
+          <p class="helper-text" id="record-status" role="status">No recording · up to 3,600 frames / 32 MiB</p>
+          <div class="btn-row"><button class="btn ghost" id="btn-save-session" type="button" disabled>Save JSON</button><button class="btn ghost" id="btn-save-csv" type="button" disabled>Body CSV</button></div>
+
+          <button class="btn ghost" id="btn-save-full-csv" type="button" disabled>Export full-detail CSV</button>
+          <div class="btn-row"><button class="btn ghost" id="btn-load-session" type="button">Open session</button><button class="btn ghost" id="btn-play" type="button" disabled>Play</button></div>
+
+          <input id="session-input" type="file" accept=".json,application/json" hidden>
+
+          <div class="field-group"><label for="playback-speed">Playback speed</label><select id="playback-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></div>
+
+          <label class="helper-text" for="timeline" id="timeline-label">Timeline · 0.0 s</label>
+
+          <input type="range" id="timeline" min="0" max="1" value="0" step="1" disabled aria-label="Session timeline">
+
+        </section>
+
+        <section class="panel-section">
+
           <h2>3D model</h2>
+
           <div class="field-group">
+
             <label for="model-source-select">Active model</label>
+
             <select id="model-source-select">
-              <option value="procedural">Procedural (default)</option>
-              <option value="xbot" id="opt-xbot" disabled>Realistic — Xbot</option>
+
+              <option value="procedural">Procedural · lightweight</option>
+
+              <option value="studio" id="opt-studio" disabled>Studio Male · T-shirt / denim / sneakers</option>
+
               <option value="custom" id="opt-custom" disabled>Your uploaded model</option>
+
             </select>
+
           </div>
+
           <div class="btn-row">
+
             <button class="btn ghost" id="btn-upload-model" type="button">Upload 3D model</button>
+
           </div>
+
           <input type="file" id="model-upload-input" accept=".glb,.gltf,.vrm,model/gltf-binary,model/gltf+json" hidden>
+
           <p id="model-upload-status" class="helper-text">
-            Supports rigged GLB, self-contained GLTF, and VRM humanoids. External GLTF sidecar files are not supported by the single-file uploader.
+
+            Studio Male is bundled locally (0.85 MiB, 7,428 triangles). You can also upload rigged GLB, self-contained GLTF, and VRM humanoids. External GLTF sidecar files are not supported by the single-file uploader.
+
           </p>
+
+        </section>
+        <section class="panel-section">
+          <h2>Face &amp; finger detail <span class="section-badge">553 POINTS</span></h2>
+          <p class="helper-text">33 body + 42 hand + 478 face points. Full three-segment fingers and 52 facial coefficient channels.</p>
+          <div class="toggle-row"><span>Face animation</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="trackFace"><span class="sr-only">Toggle face animation</span></button></div>
+          <div class="toggle-row"><span>Dense face overlay</span><button class="switch" type="button" role="switch" aria-checked="false" data-toggle="showFaceLandmarks"><span class="sr-only">Toggle dense face overlay</span></button></div>
+          <div class="btn-row"><button class="btn ghost" id="btn-calibrate-face" type="button">Calibrate neutral</button><button class="btn ghost" id="btn-reset-calibration" type="button">Reset neutral</button></div>
+          <div class="btn-row"><button class="btn ghost" id="btn-face-view" type="button">Face close-up</button><button class="btn ghost" id="btn-body-view" type="button">Full body view</button></div>
+          <div class="slider-row"><div class="slider-label"><label for="hand-smoothing">Finger / hand smoothing</label><strong id="hand-smoothing-value">0.25</strong></div><input id="hand-smoothing" type="range" min="0" max="0.95" step="0.05" value="0.25"></div>
+          <div class="slider-row"><div class="slider-label"><label for="face-smoothing">Face smoothing</label><strong id="face-smoothing-value">0.25</strong></div><input id="face-smoothing" type="range" min="0" max="0.95" step="0.05" value="0.25"></div>
+          <p class="helper-text" id="face-calibration-status" role="status">Neutral calibration: not set. Relax your face and look forward before calibrating.</p>
+          <p class="helper-text" id="detail-status" role="status">Face 0/478 · hands 0/42 · expression channels 0/52</p>
+          <p class="helper-text" id="rig-detail-status">Waiting for the character rig…</p>
         </section>
 
+
         <section class="panel-section">
+
           <h2>Display</h2>
+
           <div class="toggle-row"><span>Skeleton rig</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="showSkeleton"><span class="sr-only">Toggle skeleton rig</span></button></div>
+
           <div class="toggle-row"><span>Solid model</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="showSolid"><span class="sr-only">Toggle solid model</span></button></div>
+
           <div class="toggle-row"><span>Mirror view</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="mirror"><span class="sr-only">Toggle mirror view</span></button></div>
+
           <div class="toggle-row"><span>Source feed (PIP)</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="showPip"><span class="sr-only">Toggle source feed</span></button></div>
+
           <div class="toggle-row"><span>2D landmark overlay</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="overlay2d"><span class="sr-only">Toggle 2D landmark overlay</span></button></div>
-          <div class="toggle-row"><span>Track hands</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="trackHands"><span class="sr-only">Toggle hand tracking visualization</span></button></div>
+
+          <div class="toggle-row"><span>Hand visualization</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="trackHands"><span class="sr-only">Toggle hand tracking visualization</span></button></div>
+
           <div class="toggle-row"><span>Floor grid</span><button class="switch on" type="button" role="switch" aria-checked="true" data-toggle="showGrid"><span class="sr-only">Toggle floor grid</span></button></div>
+
           <div class="toggle-row"><span>Auto-rotate rig</span><button class="switch" type="button" role="switch" aria-checked="false" data-toggle="autorotate"><span class="sr-only">Toggle automatic orbit</span></button></div>
+
         </section>
 
         <section class="panel-section">
+
           <h2>Detection & filtering</h2>
+
           <div class="slider-row">
+
             <div class="slider-label"><label for="dc-slider">Pose detection confidence</label><strong id="dc-val">0.50</strong></div>
+
             <input type="range" id="dc-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+
           </div>
+
           <div class="slider-row">
+
             <div class="slider-label"><label for="pc-slider">Pose/hand presence confidence</label><strong id="pc-val">0.50</strong></div>
+
             <input type="range" id="pc-slider" min="0.1" max="0.9" step="0.05" value="0.5">
+
           </div>
+
           <div class="slider-row">
-            <div class="slider-label"><label for="sm-slider">Motion smoothing</label><strong id="sm-val">0.55</strong></div>
+
+            <div class="slider-label"><label for="sm-slider">Adaptive motion smoothing</label><strong id="sm-val">0.55</strong></div>
+
             <input type="range" id="sm-slider" min="0" max="0.95" step="0.05" value="0.55">
+
           </div>
+
         </section>
 
         <section class="panel-section">
+
           <h2>Session stats</h2>
+          <button class="btn ghost" id="btn-diagnostics" type="button" disabled>Export live diagnostics</button>
+
           <div class="stat-grid">
+
             <div class="stat-box"><div class="label">Resolution</div><div class="value" id="stat-res">—</div></div>
+
             <div class="stat-box"><div class="label">Avg confidence</div><div class="value" id="stat-conf">0<span>%</span></div></div>
+
             <div class="stat-box"><div class="label">Inference</div><div class="value" id="stat-inference">0<span>ms</span></div></div>
+
             <div class="stat-box"><div class="label">Uptime</div><div class="value" id="stat-uptime">0<span>s</span></div></div>
+
+            <div class="stat-box full"><div class="label">Inference / rolling p95</div><div class="value compact" id="stat-latency">—</div></div>
+
+            <div class="stat-box full"><div class="label">Capture pipeline latency</div><div class="value compact" id="stat-pipeline">—</div></div>
+            <div class="stat-box full"><div class="label">Component median times</div><div class="value compact" id="stat-components">—</div></div>
+            <div class="stat-box full"><div class="label">Hand input</div><div class="value compact" id="stat-hand-input">—</div></div>
             <div class="stat-box full"><div class="label">Tracking engine</div><div class="value compact" id="stat-engine">Loading…</div></div>
+
             <div class="stat-box full"><div class="label">Solid model</div><div class="value compact" id="stat-model">Procedural</div></div>
+
           </div>
+
         </section>
 
         <section class="panel-section no-border">
+
           <h2>Tracking signal</h2>
+
           <div class="signal-list" id="signal-list"></div>
+
         </section>
 
         <footer class="note">
-          <strong>Privacy:</strong> video frames and landmarks are processed on-device. The app has no backend; third-party library/model files are fetched from CDNs, and MediaPipe Tasks may collect library performance/usage metrics as described by Google.
+
+          <strong>Privacy:</strong> video frames and landmarks are processed on-device. The app has no backend; runtimes and models are included locally. MediaPipe Tasks may collect library performance/usage metrics as described by Google.
+
         </footer>
+
       </aside>
+
     </main>
+
   </div>
 
-  <script src="./src/bootstrap.js"></script>
-  <script type="module" src="./src/app.js"></script>
+  <script src="./src/bootstrap.js?v=3.1.0-release"></script>
+
+  <script type="module" src="./src/app.js?v=3.1.0-release"></script>
+
 </body>
+
 </html>
+

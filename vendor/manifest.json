@@ -1,0 +1,70 @@
+{
+  "three": {
+    "version": "0.186.1",
+    "source": "https://registry.npmjs.org/three/-/three-0.186.1.tgz",
+    "sha256": "8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7"
+  },
+  "mediapipe": {
+    "version": "1.0.1",
+    "source": "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-1.0.1.tgz",
+    "sha256": "ee318eaa3d42230aa10910d114faf2a488c577c4e4d33c7cb04126924aca505f"
+  },
+  "trackingModel": {
+    "source": "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task",
+    "downloadMirror": "https://huggingface.co/Skunk0/openglasses-fingerspelling-ctc/resolve/00f0d96ce7ddd022d16f9a565d1756b1cc617269/holistic_landmarker.task",
+    "sha256": "e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8",
+    "bytes": 13683609,
+    "license": "Apache-2.0"
+  },
+  "files": {
+    "assets/tracking/holistic_landmarker.task": "e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8",
+    "vendor/mediapipe/vision_bundle.mjs": "d885630c297c0b20b1fe86096cb06291c4c8080876f27852e724f24ac603713f",
+    "vendor/mediapipe/wasm/vision_wasm_internal.js": "e170ee67dd4e16c1a6fcd8840a206687e5a59b22c20e4a902bc445b095454d73",
+    "vendor/mediapipe/wasm/vision_wasm_internal.wasm": "8da277a733926eacd0474b8704b36742d6ec3231c57a860c5b889dff8f1df886",
+    "vendor/mediapipe/wasm/vision_wasm_nosimd_internal.js": "e81d715a3d42cc3373602eb2f7aff795d164934db680e32496b65dab537f9658",
+    "vendor/mediapipe/wasm/vision_wasm_nosimd_internal.wasm": "a28483cd42e74e855bf5ebdb6b40d9b66a5b49e35e95020bc97669e6822a3192",
+    "vendor/three/build/three.core.js": "9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6",
+    "vendor/three/build/three.module.js": "9052042d676cb0fdc1ddfefe193053f34b7ac0513a616fdac4535d49987812ea",
+    "vendor/three/examples/jsm/controls/OrbitControls.js": "3d79d07ecb686b4e5d93232eedab255331c1beef711e13164eaa1f68655a5f2b",
+    "vendor/three/examples/jsm/libs/basis/basis_transcoder.js": "8478b5b6d6b74e7d3082b89f6417321d8d1dc0307f2b30d4484bb11b441696a1",
+    "vendor/three/examples/jsm/libs/basis/basis_transcoder.wasm": "6cf17dc889352c42e9acf8897107978d127005fe3386c36a0e3845e27967630a",
+    "vendor/three/examples/jsm/libs/draco/gltf/draco_decoder.js": "8625489da79a805f4f2a7d511c3e52d8b4085608a9d2a4d5f4f9de5db0aea04f",
+    "vendor/three/examples/jsm/libs/draco/gltf/draco_decoder.wasm": "a680d927bed9cb864ddbd63521868891af2bfbe755092761b4837487618df8ac",
+    "vendor/three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js": "8bb2952d2ba7d67e1414f8df819410cb0434a666be53f671fff75f68843d76f6",
+    "vendor/three/examples/jsm/libs/ktx-parse.module.js": "f40c491f6c44dde511268121f778a0050e73b1a15fd844c1ae2c78c73213eafc",
+    "vendor/three/examples/jsm/libs/meshopt_decoder.module.js": "d428e73a000057c6c94bfcedc3412d0c2dc14ca8800e88553aab05113ad2bf19",
+    "vendor/three/examples/jsm/libs/zstddec.module.js": "5cbf818e842628a4464e748594a6deae18ceddda3c2f541e7b3a0ff5fc7611e2",
+    "vendor/three/examples/jsm/loaders/DRACOLoader.js": "fdafdf4aa11bbc65d89adb338efd844bedf94073702f9049240ff1f1ea48ad5f",
+    "vendor/three/examples/jsm/loaders/GLTFLoader.js": "131c0f78c01d19368ae495caa65b3adaa10487810a36a05bb5901b769a35ac16",
+    "vendor/three/examples/jsm/loaders/KTX2Loader.js": "3a3233ce3409443076d3414b78832e1405fcfac5ecb34d367365fd0781127d6c",
+    "vendor/three/examples/jsm/math/ColorSpaces.js": "cc35c01c793cd17ccded7bc8142abffd3ce0d60dd6de8d5d216983bd05aee262",
+    "vendor/three/examples/jsm/utils/BufferGeometryUtils.js": "9fb63427ce6641fa14fd0baff9cc4d1b5f9c3d85fd084bf2e90e803c44ec1797",
+    "vendor/three/examples/jsm/utils/SkeletonUtils.js": "b1632a703206c3d830de9fcbe515696770d04b71a15ee6b50afa6d2c3298c86f",
+    "vendor/three/examples/jsm/utils/WorkerPool.js": "5ac7095fd566bc9ae48376055fd66edf27cb9ebbf9e1269dc206bfd4933ae9eb",
+    "vendor/three/LICENSE": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+    "vendor/mediapipe/vision_bundle.js": "98db72469ffb176f5e9f2687be0f70783893aca681f7789c34b872b0a764371a",
+    "assets/tracking/pose_landmarker_heavy.task": "64437af838a65d18e5ba7a0d39b465540069bc8aae8308de3e318aad31fcbc7b",
+    "assets/tracking/face_landmarker.task": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    "assets/tracking/hand_landmarker.task": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+  },
+  "precisionModels": {
+    "pose_landmarker_heavy.task": {
+      "bytes": 30664242,
+      "sha256": "64437af838a65d18e5ba7a0d39b465540069bc8aae8308de3e318aad31fcbc7b",
+      "downloadMirror": "https://huggingface.co/spaces/SelimGilon/BikeFit/resolve/6d944ebb6d84de2e9c6f6b35bc3b65bc6ce30598/pose_landmarker_heavy.task",
+      "license": "Apache-2.0"
+    },
+    "face_landmarker.task": {
+      "bytes": 3758596,
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "downloadMirror": "https://huggingface.co/lithiumice/models_hub/resolve/78bcc39f485509111ec38679a0f27c98b1cca587/face_landmarker.task",
+      "license": "Apache-2.0"
+    },
+    "hand_landmarker.task": {
+      "bytes": 7819105,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "downloadMirror": "https://huggingface.co/lithiumice/models_hub/resolve/78bcc39f485509111ec38679a0f27c98b1cca587/hand_landmarker.task",
+      "license": "Apache-2.0"
+    }
+  }
+}

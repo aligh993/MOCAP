@@ -1,0 +1,75 @@
+{
+  "schema": "mocap-diagnostics",
+  "version": 1,
+  "applicationVersion": "3.1.0",
+  "timestamp": "2026-10-26T19:49:49.993Z",
+  "camera": {
+    "label": "USB2.0 HD UVC WebCam (322e:2233)",
+    "width": 1280,
+    "height": 720,
+    "frameRate": 30
+  },
+  "preset": "precision",
+  "profile": "precision",
+  "delegate": "GPU",
+  "execution": "Worker",
+  "statistics": {
+    "samples": 120,
+    "durationMs": 13379.400000095367,
+    "fps": 8.894270296063484,
+    "inference": {
+      "medianMs": 41.199999928474426,
+      "p95Ms": 208.69999992847443,
+      "meanMs": 67.15583332479
+    },
+    "pipeline": {
+      "medianMs": 42.199999928474426,
+      "p95Ms": 209.29999995231628,
+      "meanMs": 67.92333333094915
+    },
+    "components": {
+      "body": {
+        "medianMs": 17.600000023841858,
+        "p95Ms": 64.60000002384186,
+        "meanMs": 26.329166666666666
+      },
+      "face": {
+        "medianMs": 7.600000023841858,
+        "p95Ms": 32.10000002384186,
+        "meanMs": 11.244166670242945
+      },
+      "handPreparation": {
+        "medianMs": 0,
+        "p95Ms": 0.10000002384185791,
+        "meanMs": 0.005833334724108378
+      },
+      "hands": {
+        "medianMs": 14.799999952316284,
+        "p95Ms": 113.79999995231628,
+        "meanMs": 29.54333332677682
+      }
+    },
+    "availability": {
+      "face": 0.3333333333333333,
+      "bothHands": 0.7583333333333333,
+      "visibleFeet": 0
+    },
+    "last": {
+      "at": 73644.90000009537,
+      "inferenceMs": 36,
+      "latencyMs": 37.299999952316284,
+      "components": {
+        "body": 17.899999976158142,
+        "face": 7.899999976158142,
+        "handPreparation": 0,
+        "hands": 10.200000047683716
+      },
+      "handInput": "full frame",
+      "face": 478,
+      "hands": 42,
+      "feetVisible": false
+    }
+  },
+  "notes": "Detection availability is not geometric accuracy. This file contains no images, video, landmarks, or device IDs.",
+  "testContext": "Physical webcam; variable upper-body framing/gestures. Not a controlled geometric accuracy benchmark. Default temporal full-frame hands; maximum-detail preset."
+}

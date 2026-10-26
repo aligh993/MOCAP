@@ -1,0 +1,11 @@
+{
+  "scenario": "Deterministic synthetic 30 Hz signal; smoothing=0.55; 0.02 m sinusoidal jitter; independent 1 m step. This is a filter comparison, not a webcam accuracy benchmark.",
+  "v2": {
+    "jitterRmsMeters": 0.0022854852268801885,
+    "step90PercentMs": 300
+  },
+  "v3": {
+    "jitterRmsMeters": 0.0018096451462821805,
+    "step90PercentMs": 100
+  }
+}

@@ -17,7 +17,6 @@ BOOTSTRAP_PATH = ROOT / "src" / "bootstrap.js"
 STYLE_PATH = ROOT / "assets" / "styles.css"
 README_PATH = ROOT / "README.md"
 
-
 class DashboardParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -38,15 +37,12 @@ class DashboardParser(HTMLParser):
             if value and value.startswith("./"):
                 self.local_assets.append(value)
 
-
 def fail(message: str) -> None:
     print(f"[FAIL] {message}")
     raise SystemExit(1)
 
-
 def ok(message: str) -> None:
     print(f"[ OK ] {message}")
-
 
 def main() -> int:
     required = [HTML_PATH, APP_PATH, BOOTSTRAP_PATH, STYLE_PATH, README_PATH, ROOT / "LICENSE"]
@@ -62,14 +58,14 @@ def main() -> int:
 
     local_missing = []
     for asset in parser.local_assets:
-        target = (ROOT / asset[2:]).resolve()
+        target = (ROOT / asset[2:].split("?", 1)[0]).resolve()
         if not target.is_file():
             local_missing.append(asset)
     if local_missing:
         fail(f"Missing local HTML assets: {', '.join(local_missing)}")
     ok("Local HTML assets resolve")
 
-    dom_refs = set(re.findall(r'\$\("([^"]+)"\)', app))
+    dom_refs = set(re.findall(r'''\$\(["']([^"']+)["']\)''', app))
     unresolved_ids = sorted(dom_refs - parser.ids)
     if unresolved_ids:
         fail(f"JavaScript references missing DOM IDs: {', '.join(unresolved_ids)}")
@@ -85,6 +81,8 @@ def main() -> int:
     ok(f"All {len(parser.toggle_keys)} UI toggles map to state")
 
     forbidden = {
+        "removed synthetic mode": "btn-demo",
+        "removed synthetic generator": "syntheticResult",
         "legacy MediaPipe camera helper": "camera_utils",
         "legacy MediaPipe Holistic package": "@mediapipe/holistic",
         "legacy global Holistic connector constant": "Holistic.POSE_CONNECTIONS",
@@ -95,20 +93,19 @@ def main() -> int:
         fail(f"Legacy code paths still present: {', '.join(found_forbidden)}")
     ok("Legacy camera/Holistic code paths are absent")
 
-    expected_pins = [
-        "three@0.186.1",
-        "@mediapipe/tasks-vision@1.0.1",
-        "holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task",
-    ]
-    combined = html + app
-    missing_pins = [pin for pin in expected_pins if pin not in combined]
-    if missing_pins:
-        fail(f"Expected dependency pins not found: {', '.join(missing_pins)}")
-    ok("Pinned runtime dependencies are present")
+    import json, hashlib
+    manifest = json.loads((ROOT / "vendor/manifest.json").read_text(encoding="utf-8"))
+    if manifest["three"]["version"] != "0.186.1" or manifest["mediapipe"]["version"] != "1.0.1":
+        fail("Unexpected dependency versions")
+    for relative, expected in manifest["files"].items():
+        path = ROOT / relative
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            fail(f"Dependency integrity mismatch: {relative}")
+    ok(f"All {len(manifest['files'])} pinned dependency/model hashes verified")
 
     node = shutil.which("node")
     if node:
-        for script in (APP_PATH, BOOTSTRAP_PATH):
+        for script in sorted((ROOT / "src").glob("*.js")):
             result = subprocess.run([node, "--check", str(script)], capture_output=True, text=True)
             if result.returncode != 0:
                 sys.stderr.write(result.stderr)
@@ -123,7 +120,6 @@ def main() -> int:
 
     print("\nValidation passed.")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
